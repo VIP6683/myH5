@@ -7,14 +7,14 @@ const router = createRouter({
 	routes: [
 		{
 			path: '/',
-			redirect: '/area'
+			redirect: '/statistics'
 		},
 		{
 			path: '/',
 			component: MapLayout,
 			name: 'MapLayout',
 			meta: { layout: 'map' },
-			redirect: '/area',
+			redirect: '/statistics',
 			children: [
 				{
 					path: 'area',

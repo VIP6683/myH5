@@ -82,5 +82,6 @@ onBeforeUnmount(() => {
 	height: var(--app-vv-height, 100dvh);
 	max-height: var(--app-vv-height, 100dvh);
 	overflow: hidden;
+	background: var(--tabbar-bg, #000);
 }
 </style>

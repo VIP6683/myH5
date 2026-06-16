@@ -61,8 +61,11 @@ const readSelectedYear = () => {
 	return props.years[clamped] ?? '';
 };
 
+const getCurrentYear = () => String(new Date().getFullYear());
+
 const syncDraftFromModel = () => {
-	const fallback = props.years.includes('2025') ? '2025' : (props.years[0] ?? '');
+	const currentYear = getCurrentYear();
+	const fallback = props.years.includes(currentYear) ? currentYear : (props.years[0] ?? '');
 	draftYear.value = String(props.modelValue || fallback);
 };
 
@@ -319,8 +322,8 @@ onBeforeUnmount(() => {
 	transition: color 0.15s ease;
 
 	&.is-selected {
-		color: #fff;
-		font-weight: 500;
+		color: var(--app-accent, #1cded4);
+		font-weight: 600;
 	}
 }
 </style>

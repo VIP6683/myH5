@@ -1,9 +1,9 @@
 /**
  * 仅读取 public/config.js → window.APP_MAP_CONFIG
- * 场景参数来自 public/map-scene.js（见 mapSceneConfig.js）
+ * 场景参数来自 public/map-scene-2d.js（见 mapSceneConfig.js）
  */
 
-import { getMap3DSceneOptions, isPlainObject, mergePlain } from './mapSceneConfig.js';
+import { getMapSceneOptions, isPlainObject, mergePlain } from './mapSceneConfig.js';
 
 const CONFIG_SOURCE = 'public/config.js (window.APP_MAP_CONFIG)';
 
@@ -149,7 +149,7 @@ function buildAnnotationLayer(annotation = {}) {
 	return buildOnlineOrXyzLayer(layer);
 }
 
-/** 构建 Mars3D 所需的 basemaps、layers、scene 配置 */
+/** 构建 Mars2D 所需的 basemaps、layers、scene 配置 */
 export function buildMapLayerOptions() {
 	const config = getAppMapConfig();
 	const basemaps = [];
@@ -158,7 +158,6 @@ export function buildMapLayerOptions() {
 
 	if (!backendOnly && config.basemap && config.basemap.enabled !== false) {
 		const basemapLayer = buildOnlineOrXyzLayer(config.basemap);
-		// Mars3D 的 WMS 更适合作为普通图层加入（而不是 basemap 配置项）
 		if (basemapLayer?.type === 'wms') {
 			layers.push({ ...basemapLayer, zIndex: basemapLayer.zIndex ?? 1, show: basemapLayer.show ?? true });
 		} else {
@@ -173,7 +172,7 @@ export function buildMapLayerOptions() {
 		}
 	}
 
-	const sceneFromMapScene = getMap3DSceneOptions();
+	const sceneFromMapScene = getMapSceneOptions();
 	const scene =
 		isPlainObject(config.scene) && Object.keys(config.scene).length > 0
 			? mergePlain({ ...sceneFromMapScene }, config.scene)

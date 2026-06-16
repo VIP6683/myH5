@@ -1,3 +1,9 @@
+html {
+  /* 禁用双击放大等手势缩放，避免按钮/链接双击时整页被放大 */
+  touch-action: manipulation;
+  -ms-touch-action: manipulation;
+}
+
 html,
 body,
 #app {
@@ -16,6 +22,54 @@ body {
   font-family: 'Microsoft Yahei', system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
   -webkit-tap-highlight-color: transparent;
   user-select: none;
+  touch-action: manipulation;
+  -ms-touch-action: manipulation;
+}
+
+/* touch-action 不继承，需覆盖所有节点；可点击 div、遮罩等同理 */
+body * {
+  touch-action: manipulation;
+  -ms-touch-action: manipulation;
+}
+
+/* 地图画布、滚轮选择器等需保留自定义手势 */
+.mapHost,
+.mapHost *,
+.mars3d-container,
+.mars3d-container *,
+.cesium-viewer,
+.cesium-viewer *,
+.cesium-widget,
+.cesium-widget *,
+.year-picker-sheet,
+.year-picker-sheet__shade,
+.year-picker-sheet__panel,
+.year-picker-sheet__wheel-wrap,
+.draggable-bottom-sheet__handle-wrap,
+.draggable-bottom-sheet__header,
+.draggable-bottom-sheet__panel.is-dragging {
+  touch-action: none;
+}
+
+.year-picker-sheet__wheel,
+.draggable-bottom-sheet__body.is-scrollable,
+.map-feature-detail-sheet__list {
+  touch-action: pan-y;
+}
+
+/* iOS 聚焦字号 < 16px 的输入框会自动放大页面 */
+input,
+select,
+textarea {
+  font-size: 16px;
+}
+
+@media (pointer: coarse) {
+  input,
+  select,
+  textarea {
+    font-size: 16px !important;
+  }
 }
 
 body.is-scroll-locked {

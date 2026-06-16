@@ -12,8 +12,11 @@ import {
 	startDistanceMeasure,
 	startPointMeasure,
 	stopMeasureDrawing
-} from '../../../map-kit/core/mars3d.js';
+} from '../../../map-kit/mapApi.js';
 import SystemTipModal from './SystemTipModal.vue';
+import MapMeasureIcon from './MapMeasureIcon.vue';
+import locateIcon from '../../../assets/images/profile/locate.svg';
+import measureClearIcon from '../../../assets/images/profile/measure-clear.svg';
 
 defineProps({
 	motionClass: {
@@ -26,7 +29,7 @@ defineProps({
 	}
 });
 
-const emit = defineEmits(['clear-screen', 'open-tutorial', 'location-success']);
+const emit = defineEmits(['clear-screen', 'location-success']);
 
 const activeTool = ref('');
 const activeTouch = ref('');
@@ -38,8 +41,8 @@ const measureState = ref(getMeasureState());
 
 const MEASURE_TOOLS = [
 	{ id: 'point', label: '测点' },
-	{ id: 'distance', label: '距' },
-	{ id: 'area', label: '面' }
+	{ id: 'distance', label: '测距' },
+	{ id: 'area', label: '测面' }
 ];
 
 const LINE_MEASURE_TOOLS = new Set(['distance', 'area']);
@@ -59,12 +62,38 @@ const {
 });
 
 // 测距/测面选中且已在地图上落点或量算完成后才显示（误触控件时不出现）
-const showMeasureActions = computed(
-	() => LINE_MEASURE_TOOLS.has(activeTool.value) && measureState.value.showActions
-);
+const showMeasureActions = computed(() => {
+	// 移动端交互：进入测距/测面后固定显示“确定”
+	return LINE_MEASURE_TOOLS.has(activeTool.value);
+});
+
+const showMeasureClearButton = computed(() => {
+	if (LINE_MEASURE_TOOLS.has(activeTool.value)) {
+		// 移动端交互：进入测距/测面后固定显示“清除”
+		return true;
+	}
+	if (activeTool.value !== 'point') return false;
+	return (
+		measureState.value.hasPointMeasure ||
+		measureState.value.showActions ||
+		measureState.value.clearable
+	);
+});
 
 const syncMeasureState = () => {
 	measureState.value = getMeasureState();
+	if (measureState.value.hasPointMeasure) {
+		activeTool.value = 'point';
+		return;
+	}
+	if (
+		activeTool.value === 'point' &&
+		!measureState.value.isDrawing &&
+		!measureState.value.isEditing &&
+		!measureState.value.hasMeasure
+	) {
+		activeTool.value = '';
+	}
 };
 
 const onTouchStart = (key) => {
@@ -177,10 +206,6 @@ const handleClearScreen = () => {
 	emit('clear-screen');
 };
 
-const handleOpenTutorial = () => {
-	emit('open-tutorial');
-};
-
 onMounted(() => {
 	unbindMeasureState = onMeasureToolbarStateChange(() => {
 		syncMeasureState();
@@ -197,7 +222,7 @@ onBeforeUnmount(() => {
 <template>
 	<div v-show="visible" class="map-control-panel" :class="motionClass">
 		<div class="map-control-panel__stack">
-			<div class="map-control-panel__toolbar">
+			<div class="map-control-panel__toolbar map-control-panel__toolbar--measure">
 				<ul class="map-control-panel__measure-list">
 					<li
 						v-for="tool in MEASURE_TOOLS"
@@ -221,63 +246,15 @@ onBeforeUnmount(() => {
 							@click="handleMeasure(tool.id)"
 						>
 							<span class="map-control-panel__icon" aria-hidden="true">
-								<svg
-									v-if="tool.id === 'point'"
-									viewBox="0 0 24 24"
-									fill="none"
-									xmlns="http://www.w3.org/2000/svg"
-								>
-									<circle cx="12" cy="12" r="3" fill="currentColor" />
-									<path
-										d="M12 3v3M12 18v3M3 12h3M18 12h3"
-										stroke="currentColor"
-										stroke-width="1.8"
-										stroke-linecap="round"
-									/>
-									<circle
-										cx="12"
-										cy="12"
-										r="8.5"
-										stroke="currentColor"
-										stroke-width="1.8"
-									/>
-								</svg>
-								<svg
-									v-else-if="tool.id === 'distance'"
-									viewBox="0 0 24 24"
-									fill="none"
-									xmlns="http://www.w3.org/2000/svg"
-								>
-									<path
-										d="M4 18l16-12"
-										stroke="currentColor"
-										stroke-width="1.8"
-										stroke-linecap="round"
-									/>
-									<circle cx="4" cy="18" r="2" fill="currentColor" />
-									<circle cx="20" cy="6" r="2" fill="currentColor" />
-								</svg>
-								<svg
-									v-else
-									viewBox="0 0 24 24"
-									fill="none"
-									xmlns="http://www.w3.org/2000/svg"
-								>
-									<path
-										d="M6 8l6-3 6 3v8l-6 3-6-3V8Z"
-										stroke="currentColor"
-										stroke-width="1.8"
-										stroke-linejoin="round"
-									/>
-								</svg>
+								<MapMeasureIcon :name="tool.id" />
 							</span>
 							<span class="map-control-panel__label">{{ tool.label }}</span>
 						</button>
 					</li>
 				</ul>
+			</div>
 
-				<div class="map-control-panel__divider" />
-
+			<div class="map-control-panel__toolbar map-control-panel__toolbar--utility">
 				<ul class="map-control-panel__utility-list">
 					<li
 						class="map-control-panel__item"
@@ -321,52 +298,12 @@ onBeforeUnmount(() => {
 							<span class="map-control-panel__label">清屏</span>
 						</button>
 					</li>
-					<li
-						class="map-control-panel__item"
-						:class="{ 'is-touch': activeTouch === 'help' }"
-					>
-						<button
-							type="button"
-							class="map-control-panel__btn map-control-panel__btn--utility"
-							aria-label="帮助"
-							@touchstart.passive="onTouchStart('help')"
-							@touchend.passive="onTouchEnd"
-							@touchcancel.passive="onTouchEnd"
-							@mousedown="onTouchStart('help')"
-							@mouseup="onTouchEnd"
-							@mouseleave="onTouchEnd"
-							@click="handleOpenTutorial"
-						>
-							<span class="map-control-panel__icon" aria-hidden="true">
-								<svg
-									viewBox="0 0 24 24"
-									fill="none"
-									xmlns="http://www.w3.org/2000/svg"
-								>
-									<circle
-										cx="12"
-										cy="12"
-										r="8.5"
-										stroke="currentColor"
-										stroke-width="1.8"
-									/>
-									<path
-										d="M9.5 9.2a2.6 2.6 0 0 1 4.6 1.4c0 1.6-2.1 2-2.1 3.4"
-										stroke="currentColor"
-										stroke-width="1.8"
-										stroke-linecap="round"
-									/>
-									<circle cx="12" cy="16.8" r="1" fill="currentColor" />
-								</svg>
-							</span>
-							<span class="map-control-panel__label">帮助</span>
-						</button>
-					</li>
 				</ul>
 			</div>
 
-			<div v-if="showMeasureActions" class="map-control-panel__actions">
+			<div v-if="showMeasureClearButton" class="map-control-panel__actions">
 				<button
+					v-if="showMeasureActions"
 					type="button"
 					class="map-control-panel__action-btn map-control-panel__action-btn--confirm"
 					:class="{ 'is-touch': activeTouch === 'measure-confirm' }"
@@ -383,6 +320,7 @@ onBeforeUnmount(() => {
 				<button
 					type="button"
 					class="map-control-panel__action-btn map-control-panel__action-btn--clear"
+					aria-label="清除"
 					:class="{ 'is-touch': activeTouch === 'measure-clear' }"
 					@touchstart.passive="onTouchStart('measure-clear')"
 					@touchend.passive="onTouchEnd"
@@ -392,7 +330,13 @@ onBeforeUnmount(() => {
 					@mouseleave="onTouchEnd"
 					@click="handleMeasureClear"
 				>
-					清除
+					<img
+						:src="measureClearIcon"
+						alt=""
+						class="map-control-panel__action-icon"
+						aria-hidden="true"
+					/>
+					<span class="map-control-panel__action-label">清除</span>
 				</button>
 			</div>
 		</div>
@@ -410,21 +354,7 @@ onBeforeUnmount(() => {
 			@mouseleave="onTouchEnd"
 			@click="handleLocateMyPosition"
 		>
-			<svg
-				viewBox="0 0 24 24"
-				fill="none"
-				xmlns="http://www.w3.org/2000/svg"
-				aria-hidden="true"
-			>
-				<circle cx="12" cy="12" r="8.5" stroke="currentColor" stroke-width="1.8" />
-				<circle cx="12" cy="12" r="2.5" fill="currentColor" />
-				<path
-					d="M12 3v3M12 18v3M3 12h3M18 12h3"
-					stroke="currentColor"
-					stroke-width="1.8"
-					stroke-linecap="round"
-				/>
-			</svg>
+			<img :src="locateIcon" alt="" class="map-control-panel__locate-icon" aria-hidden="true" />
 		</button>
 
 		<LocationPermissionDialog
@@ -470,8 +400,8 @@ onBeforeUnmount(() => {
 }
 
 .map-control-panel__toolbar {
-	width: 44px;
-	padding: 4px 0;
+	width: 40px;
+	padding: 3px 0;
 	border-radius: 8px;
 	background: rgba(20, 22, 26, 0.88);
 	border: 1px solid rgba(255, 255, 255, 0.08);
@@ -480,19 +410,26 @@ onBeforeUnmount(() => {
 	-webkit-backdrop-filter: blur(8px);
 }
 
+.map-control-panel__toolbar--measure,
+.map-control-panel__toolbar--utility {
+	display: flex;
+	flex-direction: column;
+}
+
 .map-control-panel__actions {
 	display: flex;
 	flex-direction: column;
 	gap: 6px;
-	width: 44px;
+	width: 40px;
 }
 
 .map-control-panel__action-btn {
-	width: 44px;
-	padding: 8px 0;
+	width: 40px;
+	height: 40px;
+	padding: 6px 0;
 	border: 0;
 	border-radius: 8px;
-	font-size: 12px;
+	font-size: 11px;
 	line-height: 1.2;
 	font-weight: 500;
 	cursor: pointer;
@@ -508,15 +445,30 @@ onBeforeUnmount(() => {
 }
 
 .map-control-panel__action-btn--confirm {
-	background: var(--app-accent, #1cded4);
-	color: #0a1412;
-	box-shadow: 0 2px 8px rgba(45, 212, 191, 0.35);
+	background: linear-gradient(180deg, #4c8dff 0%, #2f6fe6 100%);
+	color: #ffffff;
+	box-shadow: 0 2px 8px rgba(47, 111, 230, 0.35);
 }
 
 .map-control-panel__action-btn--clear {
 	background: rgba(20, 22, 26, 0.92);
-	color: rgba(255, 255, 255, 0.88);
 	border: 1px solid rgba(255, 255, 255, 0.12);
+	color: #fff;
+}
+
+.map-control-panel__action-icon {
+	display: block;
+	width: 18px;
+	height: 18px;
+	object-fit: contain;
+	margin: 0 auto;
+}
+
+.map-control-panel__action-label {
+	display: block;
+	margin-top: 1px;
+	font-size: 9px;
+	line-height: 1.2;
 }
 
 .map-control-panel__measure-list,
@@ -536,12 +488,12 @@ onBeforeUnmount(() => {
 	flex-direction: column;
 	align-items: center;
 	justify-content: center;
-	gap: 2px;
-	width: 44px;
-	padding: 8px 0;
+	gap: 1px;
+	width: 40px;
+	padding: 6px 0;
 	border: 0;
 	background: transparent;
-	color: rgba(255, 255, 255, 0.72);
+	color: #fff;
 	cursor: pointer;
 	-webkit-tap-highlight-color: transparent;
 	transition:
@@ -562,57 +514,48 @@ onBeforeUnmount(() => {
 	display: flex;
 	align-items: center;
 	justify-content: center;
-	width: 22px;
-	height: 22px;
-}
-
-.map-control-panel__icon svg {
-	width: 100%;
-	height: 100%;
+	width: 18px;
+	height: 18px;
 }
 
 .map-control-panel__label {
-	font-size: 10px;
+	font-size: 9px;
 	line-height: 1.2;
 	white-space: nowrap;
-}
-
-.map-control-panel__divider {
-	height: 1px;
-	margin: 2px 8px;
-	background: rgba(255, 255, 255, 0.12);
 }
 
 .map-control-panel__locate {
 	display: flex;
 	align-items: center;
 	justify-content: center;
-	width: 40px;
-	height: 40px;
+	width: 36px;
+	height: 36px;
 	padding: 0;
-	border: 0;
-	border-radius: 50%;
-	background: rgba(20, 22, 26, 0.92);
-	border: 1px solid rgba(255, 255, 255, 0.1);
-	box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-	color: #fff;
+	border: 1px solid rgba(255, 255, 255, 0.08);
+	border-radius: 8px;
+	background: rgba(20, 22, 26, 0.88);
+	box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
+	backdrop-filter: blur(8px);
+	-webkit-backdrop-filter: blur(8px);
 	cursor: pointer;
 	-webkit-tap-highlight-color: transparent;
 	transition: transform 0.1s ease;
-
-	svg {
-		width: 22px;
-		height: 22px;
-	}
 
 	&:active,
 	&.is-touch {
 		transform: scale(0.94);
 	}
 
-	&.locating svg {
+	&.locating .map-control-panel__locate-icon {
 		animation: mapControlLocateSpin 1.2s linear infinite;
 	}
+}
+
+.map-control-panel__locate-icon {
+	display: block;
+	width: 22px;
+	height: 22px;
+	object-fit: contain;
 }
 
 @keyframes mapControlLocateSpin {

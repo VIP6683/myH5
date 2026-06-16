@@ -1,4 +1,4 @@
-import { getMapInstance } from '../../../map-kit/core/mars3d.js';
+import { getMapInstance } from '../../../map-kit/mapApi.js';
 import { MONITOR_LAYER_ID } from './monitorMockStore.js';
 
 /**

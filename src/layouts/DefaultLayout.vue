@@ -13,5 +13,6 @@
 	overflow: hidden;
 	padding-bottom: calc(56px + env(safe-area-inset-bottom, 0px));
 	box-sizing: border-box;
+	background: var(--tabbar-bg, #000);
 }
 </style>

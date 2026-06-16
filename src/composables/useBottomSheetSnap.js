@@ -112,7 +112,7 @@ export function useBottomSheetSnap(options) {
 
 	const panelStyle = computed(() => ({
 		height: `${metrics.value.expandedHeightPx}px`,
-		transform: `translate3d(0, ${translateYPx.value}px, 0)`
+		transform: `translate3d(0, ${Math.round(translateYPx.value)}px, 0)`
 	}));
 
 	const resetDrag = () => {

@@ -26,6 +26,10 @@ const props = defineProps({
 	closeOnShade: {
 		type: Boolean,
 		default: true
+	},
+	zIndex: {
+		type: Number,
+		default: 2000
 	}
 });
 
@@ -65,7 +69,7 @@ onBeforeUnmount(() => {
 
 <template>
 	<Teleport to="body">
-		<div v-if="rendered" class="map-modal">
+		<div v-if="rendered" class="map-modal" :style="{ zIndex }">
 			<div
 				class="map-modal__shade"
 				:style="{ backgroundColor: '#000', opacity: shadeOpacity }"
@@ -89,7 +93,6 @@ onBeforeUnmount(() => {
 .map-modal {
 	position: fixed;
 	inset: 0;
-	z-index: 2000;
 	display: flex;
 	align-items: center;
 	justify-content: center;

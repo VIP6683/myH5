@@ -1,4 +1,4 @@
-/* 测点等量算 Popup（MapHome 未挂载 MapToolbar 时仍需全局样式） */
+/* 测点等量算 Popup 全局样式（由 MapControlPanel 触发） */
 .mars3d-popup-content,
 .mars3d-template-content {
 	overflow-y: hidden !important;
@@ -92,4 +92,60 @@
 	line-height: 1 !important;
 	font-size: 20px !important;
 	border-radius: 0 5px 0 5px;
+}
+
+.leaflet-popup.measure-point-popup .leaflet-popup-content-wrapper {
+	background: #ffffff;
+	border-radius: 10px;
+	box-shadow: 0 8px 20px rgba(15, 23, 42, 0.22);
+	border: 1px solid rgba(226, 232, 240, 0.95);
+	padding: 0;
+}
+
+.leaflet-popup.measure-point-popup .leaflet-popup-content {
+	margin: 0;
+	padding: 12px 14px;
+	min-width: 120px;
+	color: #2e384b;
+	font-size: 14px;
+	line-height: 1.6;
+}
+
+.leaflet-popup.measure-point-popup .leaflet-popup-tip {
+	background: #ffffff;
+	box-shadow: none;
+}
+
+.leaflet-popup.measure-point-popup .leaflet-popup-close-button {
+	top: 8px;
+	right: 8px;
+	width: 20px;
+	height: 20px;
+	padding: 0;
+	color: #9aa6b2;
+	font-size: 20px;
+	line-height: 18px;
+	font-weight: 400;
+}
+
+/* 移动端不使用鼠标右键/双击结束，隐藏库内跟随提示 */
+.leaflet-draw-tooltip,
+.leaflet-error-draw-tooltip,
+.leaflet-tooltip,
+.leaflet-tooltip-pane {
+	display: none !important;
+}
+
+.measure-point-popup-card__title {
+	margin: 0 18px 6px 0;
+	font-size: 16px;
+	font-weight: 700;
+	color: #2e384b;
+	line-height: 1.35;
+}
+
+.measure-point-popup-card__line {
+	font-size: 14px;
+	color: #334155;
+	word-break: break-word;
 }

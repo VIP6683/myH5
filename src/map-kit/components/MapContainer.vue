@@ -59,7 +59,7 @@ defineExpose({
 	overflow: hidden;
 	/* 阻止浏览器默认双指缩放/滚动，交给 Cesium 处理 */
 	touch-action: none;
-	/* 底图未加载前的占位色，与 map-scene.js backgroundColor 一致 */
+	/* 底图未加载前的占位色，与 map-scene-2d.js backgroundColor 一致 */
 	background: #f5f6f7;
 
 	&.map-host--interaction-locked {
@@ -101,7 +101,7 @@ defineExpose({
 	:deep(.map-legend),
 	:deep(.map-side-menu),
 	:deep(.map-control-panel),
-	:deep(.clear-screen-back-btn),
+	:deep(.clear-screen-exit-btn),
 	:deep(.map-top-bar),
 	:deep(.map-top-bar__shade),
 	:deep(.map-floating-tab-bar-wrap),

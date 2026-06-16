@@ -4,6 +4,9 @@ import DraggableBottomSheet from '../../../components/DraggableBottomSheet.vue';
 import NavMapActionSheet from '../../nav-demo/components/NavMapActionSheet.vue';
 import { MAP_UI_OVERLAY_KEY } from '../composables/useMapUiOverlay.js';
 import { addPhotoWatermark } from '../utils/addPhotoWatermark.js';
+import { calcDistanceMeters, formatDistanceText } from '../utils/calcGeoDistance.js';
+import { reverseGeocode } from '../utils/tiandituGeocoder.js';
+import { getCurrentLocation } from '../../../utils/locationPermission.js';
 
 const visible = defineModel('visible', { type: Boolean, default: false });
 
@@ -111,14 +114,45 @@ const resetForm = () => {
 	}
 };
 
-const getWatermarkOptions = () => {
-	const coordinates = props.detail?.coordinates;
+const getWatermarkOptions = async () => {
+	const patchNo = props.detail?.patchNo || props.detail?.objectNo || '未知';
+	let lng = '';
+	let lat = '';
+	let address = '';
+	let distance = '未知';
+
+	try {
+		const current = await getCurrentLocation();
+		lng = Number(current.lng.toFixed(6));
+		lat = Number(current.lat.toFixed(6));
+
+		const patchCoords = props.detail?.coordinates;
+		if (patchCoords?.lng != null && patchCoords?.lat != null) {
+			distance = formatDistanceText(
+				calcDistanceMeters(
+					{ lng: current.lng, lat: current.lat },
+					{ lng: patchCoords.lng, lat: patchCoords.lat }
+				)
+			);
+		}
+
+		try {
+			address = await reverseGeocode(current.lng, current.lat);
+		} catch (error) {
+			console.warn('[MapVerify] reverse geocode failed', error);
+		}
+	} catch (error) {
+		console.warn('[MapVerify] get current location failed', error);
+	}
+
 	return {
+		patchNo,
 		inspector: inspectorName,
 		shotTime: new Date(),
-		lng: coordinates?.lng ?? '',
-		lat: coordinates?.lat ?? '',
-		deviceName: props.detail?.substationName || props.detail?.name || '未知设备'
+		distance,
+		lng,
+		lat,
+		address
 	};
 };
 
@@ -133,7 +167,7 @@ const onPhotoChange = async (event) => {
 
 	photoProcessing.value = true;
 	try {
-		const watermarkedFile = await addPhotoWatermark(file, getWatermarkOptions());
+		const watermarkedFile = await addPhotoWatermark(file, await getWatermarkOptions());
 		form.photoFile = watermarkedFile;
 		form.photoName = watermarkedFile.name;
 		setPhotoPreview(watermarkedFile);
@@ -201,7 +235,7 @@ onBeforeUnmount(() => {
 		aria-label="核查信息"
 		theme="dark"
 		panel-class="map-verify-form-sheet__panel"
-		peek-height="42vh"
+		peek-height="38vh"
 		@after-close="onSheetAfterClose"
 	>
 		<template #header>
@@ -271,7 +305,7 @@ onBeforeUnmount(() => {
 				<div class="map-verify-form-sheet__field">
 					<label class="map-verify-form-sheet__field-label">
 						<span class="map-verify-form-sheet__required">*</span>
-						是否核查
+						是否处置
 					</label>
 					<button
 						type="button"
@@ -405,8 +439,8 @@ onBeforeUnmount(() => {
 	display: flex;
 	align-items: center;
 	justify-content: space-between;
-	gap: 12px;
-	padding: 16px 16px 12px;
+	gap: 10px;
+	padding: 10px 14px 8px;
 	flex-shrink: 0;
 }
 
@@ -422,9 +456,9 @@ onBeforeUnmount(() => {
 	align-items: center;
 	justify-content: center;
 	flex-shrink: 0;
-	width: 32px;
-	height: 32px;
-	margin-left: -6px;
+	width: 28px;
+	height: 28px;
+	margin-left: -4px;
 	padding: 0;
 	border: 0;
 	background: transparent;
@@ -434,8 +468,8 @@ onBeforeUnmount(() => {
 
 	svg {
 		display: block;
-		width: 22px;
-		height: 22px;
+		width: 20px;
+		height: 20px;
 	}
 
 	&:active {
@@ -445,7 +479,7 @@ onBeforeUnmount(() => {
 
 .map-verify-form-sheet__title {
 	margin: 0;
-	font-size: 16px;
+	font-size: 14px;
 	font-weight: 500;
 	color: var(--app-accent, #1cded4);
 	line-height: 1.3;
@@ -458,7 +492,7 @@ onBeforeUnmount(() => {
 	color: var(--app-accent, #1cded4);
 	font-size: 14px;
 	font-weight: 500;
-	line-height: 1.4;
+	line-height: 1.3;
 	cursor: pointer;
 	-webkit-tap-highlight-color: transparent;
 
@@ -473,14 +507,14 @@ onBeforeUnmount(() => {
 }
 
 .map-verify-form-sheet__body {
-	padding: 0 16px;
+	padding: 0 14px;
 	box-sizing: border-box;
 }
 
 .map-verify-form-sheet__info-card {
-	margin-bottom: 8px;
-	padding: 12px 14px;
-	border-radius: 10px;
+	margin-bottom: 4px;
+	padding: 8px 12px;
+	border-radius: 8px;
 	background: rgba(255, 255, 255, 0.04);
 }
 
@@ -492,9 +526,9 @@ onBeforeUnmount(() => {
 	display: flex;
 	align-items: flex-start;
 	justify-content: space-between;
-	gap: 16px;
+	gap: 12px;
 	min-width: 0;
-	padding: 10px 0;
+	padding: 6px 0;
 
 	&:not(:last-child) {
 		border-bottom: 1px solid rgba(255, 255, 255, 0.05);
@@ -504,45 +538,45 @@ onBeforeUnmount(() => {
 .map-verify-form-sheet__info-label {
 	margin: 0;
 	flex-shrink: 0;
-	font-size: 13px;
-	color: rgba(255, 255, 255, 0.55);
-	line-height: 1.4;
+	font-size: 12px;
+	color: rgba(255, 255, 255, 0.5);
+	line-height: 1.3;
 }
 
 .map-verify-form-sheet__info-value {
 	margin: 0;
 	min-width: 0;
 	text-align: right;
-	font-size: 13px;
-	color: #fff;
-	line-height: 1.4;
+	font-size: 12px;
+	color: rgba(255, 255, 255, 0.92);
+	line-height: 1.3;
 	word-break: break-all;
 	overflow-wrap: anywhere;
 }
 
 .map-verify-form-sheet__form {
-	padding-bottom: 8px;
+	padding-bottom: 4px;
 }
 
 .map-verify-form-sheet__field {
 	display: flex;
 	align-items: center;
 	justify-content: space-between;
-	gap: 12px;
+	gap: 10px;
 	min-width: 0;
-	padding: 14px 0;
-	border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+	padding: 9px 0;
+	border-bottom: 1px solid rgba(255, 255, 255, 0.05);
 
 	&--input {
 		flex-direction: column;
 		align-items: stretch;
-		gap: 10px;
+		gap: 6px;
 	}
 
 	&--photo {
 		flex-direction: column;
 		align-items: stretch;
-		gap: 12px;
+		gap: 8px;
 	}
 }
 
@@ -552,22 +586,22 @@ onBeforeUnmount(() => {
 	gap: 2px;
 	min-width: 0;
 	flex: 1;
-	font-size: 14px;
-	color: rgba(255, 255, 255, 0.85);
-	line-height: 1.4;
+	font-size: 13px;
+	color: rgba(255, 255, 255, 0.82);
+	line-height: 1.3;
 }
 
 .map-verify-form-sheet__required {
 	color: #ff4d4f;
-	font-size: 14px;
+	font-size: 13px;
 	line-height: 1;
 }
 
 .map-verify-form-sheet__switch {
 	position: relative;
 	flex-shrink: 0;
-	width: 44px;
-	height: 24px;
+	width: 40px;
+	height: 22px;
 	padding: 0;
 	border: 0;
 	border-radius: 999px;
@@ -585,8 +619,8 @@ onBeforeUnmount(() => {
 	position: absolute;
 	top: 2px;
 	left: 2px;
-	width: 20px;
-	height: 20px;
+	width: 18px;
+	height: 18px;
 	border-radius: 50%;
 	background: #fff;
 	box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
@@ -594,7 +628,7 @@ onBeforeUnmount(() => {
 }
 
 .map-verify-form-sheet__switch.is-on .map-verify-form-sheet__switch-thumb {
-	transform: translateX(20px);
+	transform: translateX(18px);
 }
 
 .map-verify-form-sheet__photo-row {
@@ -608,14 +642,14 @@ onBeforeUnmount(() => {
 .map-verify-form-sheet__photo-btn {
 	flex-shrink: 0;
 	max-width: 50%;
-	padding: 6px 14px;
+	padding: 4px 12px;
 	border: 0;
 	border-radius: 999px;
-	background: var(--app-accent, #1cded4);
+	background: var(--app-accent-gradient);
 	color: #fff;
-	font-size: 13px;
+	font-size: 12px;
 	font-weight: 500;
-	line-height: 1.4;
+	line-height: 1.3;
 	cursor: pointer;
 	white-space: nowrap;
 	overflow: hidden;
@@ -643,7 +677,7 @@ onBeforeUnmount(() => {
 	width: 100%;
 	padding: 0;
 	border: 0;
-	border-radius: 10px;
+	border-radius: 8px;
 	overflow: hidden;
 	background: rgba(255, 255, 255, 0.04);
 	cursor: pointer;
@@ -657,15 +691,15 @@ onBeforeUnmount(() => {
 .map-verify-form-sheet__photo-preview-img {
 	display: block;
 	width: 100%;
-	max-height: 180px;
+	max-height: 120px;
 	object-fit: cover;
 }
 
 .map-verify-form-sheet__photo-preview-hint {
 	position: absolute;
-	right: 10px;
-	bottom: 10px;
-	padding: 4px 10px;
+	right: 8px;
+	bottom: 8px;
+	padding: 3px 8px;
 	border-radius: 999px;
 	background: rgba(0, 0, 0, 0.55);
 	color: #fff;
@@ -717,13 +751,13 @@ onBeforeUnmount(() => {
 	width: 100%;
 	max-width: 100%;
 	box-sizing: border-box;
-	padding: 10px 12px;
+	padding: 7px 10px;
 	border: 0;
-	border-radius: 8px;
+	border-radius: 6px;
 	background: rgba(255, 255, 255, 0.06);
 	color: #fff;
-	font-size: 14px;
-	line-height: 1.4;
+	font-size: 13px;
+	line-height: 1.3;
 	outline: none;
 
 	&::placeholder {
@@ -735,22 +769,22 @@ onBeforeUnmount(() => {
 	display: flex;
 	align-items: center;
 	justify-content: center;
-	gap: 16px;
+	gap: 12px;
 	width: 100%;
 	box-sizing: border-box;
-	padding: 14px 16px 16px;
+	padding: 8px 14px 12px;
 	flex-shrink: 0;
 }
 
 .map-verify-form-sheet__btn {
 	flex: 1;
 	min-width: 0;
-	max-width: 140px;
-	padding: 10px 16px;
+	max-width: 130px;
+	padding: 8px 14px;
 	border-radius: 999px;
-	font-size: 14px;
+	font-size: 13px;
 	font-weight: 500;
-	line-height: 1.4;
+	line-height: 1.3;
 	cursor: pointer;
 	-webkit-tap-highlight-color: transparent;
 	transition: opacity 0.15s ease;

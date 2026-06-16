@@ -5,7 +5,7 @@
  * - backend：内网模式，底图/注记/DEM 均来自接口 getLayersData（对齐原 Map.vue）
  * - online：使用下方 basemap / annotation 在线或自建瓦片（需能访问外网或内网瓦片地址）
  *
- * 场景/视角：改 public/map-scene.js（MAP_SCENE_CONFIG）
+ * 场景/视角：改 public/map-scene-2d.js（MAP_SCENE_2D_CONFIG）
  * @see map-kit/config/runtimeConfig.js
  */
 window.APP_MAP_CONFIG = {
@@ -50,7 +50,7 @@ window.APP_MAP_CONFIG = {
 		chinaCRS: 'WGS84'
 	},
 
-	// 给 mars3d.Map options.scene 用（本项目优先从 public/map-scene.js 读取）
+	// 给 mars2d.Map options 用（本项目优先从 public/map-scene-2d.js 读取）
 	scene: null
 };
 

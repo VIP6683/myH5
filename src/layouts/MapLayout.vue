@@ -3,10 +3,10 @@ import { computed, onBeforeUnmount, provide, ref, watch } from 'vue';
 import { useGlobalTabBar } from '../business/map-shell/composables/useGlobalTabBar.js';
 import { RouterView, useRoute } from 'vue-router';
 import MapContainer from '../map-kit/components/MapContainer.vue';
-import MarsMap from '../map-kit/components/MarsMap.vue';
-import { getDefaultMapOptions, setMapInstance } from '../map-kit/core/mars3d.js';
+import Mars2dMap from '../map-kit/mars2d/components/Mars2dMap.vue';
+import { getDefaultMapOptions, setMapInstance } from '../map-kit/mapApi.js';
 import MapControlPanel from '../business/map-shell/components/MapControlPanel.vue';
-import ClearScreenBackButton from '../business/map-shell/components/ClearScreenBackButton.vue';
+import ClearScreenExitButton from '../business/map-shell/components/ClearScreenExitButton.vue';
 import MapTopBar from '../business/map-shell/components/MapTopBar.vue';
 import { useClearScreen } from '../business/map-shell/composables/useClearScreen.js';
 import {
@@ -14,11 +14,6 @@ import {
 	useMapUiOverlay
 } from '../business/map-shell/composables/useMapUiOverlay.js';
 import { useMapSlideMotion } from '../business/map-shell/composables/useMapSlideMotion.js';
-import TutorialGuideModal from '../business/tutorial/components/TutorialGuideModal.vue';
-import {
-	markTutorialOpened,
-	shouldAutoOpenTutorial
-} from '../business/tutorial/composables/useTutorialGuide.js';
 import MapFeatureDetailSheet from '../business/map-shell/components/MapFeatureDetailSheet.vue';
 import MapPatchListSheet from '../business/map-shell/components/MapPatchListSheet.vue';
 import MapVerifyFormSheet from '../business/map-shell/components/MapVerifyFormSheet.vue';
@@ -36,7 +31,6 @@ const mapOptions = getDefaultMapOptions();
 const activeTab = computed(() => route.meta.tab || 'area-monitor');
 const headerTab = ref('pending-verify');
 const searchKeyword = ref('');
-const tutorialVisible = ref(false);
 const mapLoaded = ref(false);
 const featureDetailVisible = ref(false);
 const featureDetail = ref(null);
@@ -131,14 +125,6 @@ function handleMapLoaded() {
 	playBottomBarEnter();
 	mapLoaded.value = true;
 
-	if (shouldAutoOpenTutorial()) {
-		markTutorialOpened();
-		tutorialVisible.value = true;
-	}
-}
-
-function openTutorialGuide() {
-	tutorialVisible.value = true;
 }
 
 function handleFeatureClick(payload) {
@@ -147,6 +133,7 @@ function handleFeatureClick(payload) {
 		return;
 	}
 
+	patchListVisible.value = false;
 	featureDetail.value = payload.attr || null;
 	featureDetailVisible.value = true;
 }
@@ -192,7 +179,7 @@ onBeforeUnmount(() => {
 		<MapContainer>
 			<MonitorMockGraphics v-if="mapLoaded" :active-tab="activeTab" />
 
-			<MarsMap
+			<Mars2dMap
 				:map-options="mapOptions"
 				:use-global-map="true"
 				loading-text="数界一张图加载中..."
@@ -214,10 +201,7 @@ onBeforeUnmount(() => {
 				:visible="sideMenuVisible"
 				:motion-class="sideMenuMotionClass"
 				@clear-screen="enterClearScreen"
-				@open-tutorial="openTutorialGuide"
 			/>
-
-			<TutorialGuideModal v-model:visible="tutorialVisible" />
 
 			<MapFeatureDetailSheet
 				v-model:visible="featureDetailVisible"
@@ -238,7 +222,7 @@ onBeforeUnmount(() => {
 				:filters="appliedFilters"
 			/>
 
-			<ClearScreenBackButton
+			<ClearScreenExitButton
 				:visible="backButtonVisible"
 				:motion-class="backButtonMotionClass"
 				@click="exitClearScreen"

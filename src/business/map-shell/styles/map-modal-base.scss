@@ -1,13 +1,13 @@
-/* 业务弹框统一壳层 — 对齐原站 divwin / layero 比例（375 设计稿） */
+/* 业务弹框统一壳层 — 对齐系统说明弹框（375 设计稿） */
 .map-modal-card {
 	position: relative;
 	box-sizing: border-box;
 	width: 318.75px;
 	max-width: 86vw;
-	padding: 14px 14px 12px;
-	border-radius: 10px;
+	padding: 16px 16px 14px;
+	border-radius: 15px;
 	background: #fff;
-	box-shadow: 0 6px 18px rgba(0, 0, 0, 0.16);
+	box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
 	overflow: visible;
 }
 
@@ -37,7 +37,7 @@
 	height: 34px;
 	padding: 0;
 	border: 0;
-	border-radius: 0 10px 0 20px;
+	border-radius: 0 15px 0 20px;
 	background: #f9a54e;
 	color: #fff;
 	font-size: 18px;
@@ -66,9 +66,11 @@
 
 .map-modal-card__content {
 	font-size: 14px;
-	line-height: 1.6;
+	line-height: 1.65;
 	color: #666;
 	word-break: break-word;
+	white-space: pre-line;
+	text-align: center;
 }
 
 .map-modal-card__body {
@@ -86,24 +88,27 @@
 .map-modal-card__actions {
 	display: flex;
 	justify-content: flex-end;
-	margin-top: 10px;
+	margin-top: 14px;
+	width: 100%;
+}
+
+.map-modal-card__actions:not(.map-modal-card__actions--split) .map-modal-card__btn {
+	width: 100%;
 }
 
 .map-modal-card__actions--split {
 	justify-content: space-between;
-	gap: 8px;
+	gap: 10px;
 }
 
 .map-modal-card__btn {
 	min-width: 72px;
-	height: 36px;
+	height: 40px;
 	padding: 0 16px;
 	border: 0;
-	border-radius: 4px;
-	background: #ffd448;
-	color: #5a4a1d;
-	font-size: 14px;
-	font-weight: 600;
+	border-radius: 8px;
+	font-size: 15px;
+	font-weight: 500;
 	line-height: 1;
 	cursor: pointer;
 }
@@ -114,13 +119,18 @@
 }
 
 .map-modal-card__btn--secondary {
-	background: #377be0;
-	color: #fff;
+	background: #eee;
+	color: #666;
 }
 
 .map-modal-card__btn--primary {
 	background: #f09005;
 	color: #fff;
+}
+
+.map-modal-card__btn--full {
+	flex: 1;
+	width: 100%;
 }
 
 .map-modal-card__btn--disabled {

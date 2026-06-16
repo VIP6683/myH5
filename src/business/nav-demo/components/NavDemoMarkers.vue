@@ -1,6 +1,6 @@
 <script setup>
 import { onBeforeUnmount, onMounted, ref } from 'vue';
-import { addLocationMarkers, clearLocationMarkers } from '../../../map-kit/core/mars3d.js';
+import { addLocationMarkers, clearLocationMarkers } from '../../../map-kit/mapApi.js';
 import { bindNavPopupCameraSync, NAV_POPUP_BASE_OFFSET } from '../utils/bindNavPopupCameraSync.js';
 import { openNavDestination } from '../utils/openMapApp.js';
 import { preloadWeChatJssdk } from '../utils/wechatJssdk.js';

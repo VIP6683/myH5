@@ -1,14 +1,13 @@
 /**
- * Mars3D 地图核心模块（可拷贝到其他项目）
+ * 地图核心模块（当前项目使用 Mars2D，可拷贝到其他项目）
  *
  * 职责：地图实例、配置读取、图层显隐、测距/复位/2D3D、标记打点、统一事件
  * 不包含：业务侧栏、底栏、教程、系统弹框等（见 src/business/）
  *
  * 迁移清单：
  * - 拷贝 src/map-kit/
- * - 拷贝 public/lib/（mars3d、Cesium、turf）
- * - 拷贝 public/config.js、public/map-scene.js
- * - 在 index.html 中加载上述脚本
+ * - 拷贝 public/config.js、public/map-scene-2d.js
+ * - 在 index.html 中加载运行时配置脚本
  */
 
 export {
@@ -32,7 +31,7 @@ export {
 export {
 	loadMapSceneConfig,
 	getMapSceneCenter,
-	getMap3DSceneOptions
+	getMapSceneOptions
 } from './config/mapSceneConfig.js';
 export { getAppMapConfig, getMapTokens, buildMapLayerOptions, usesBackendLayers } from './config/runtimeConfig.js';
 
@@ -104,7 +103,7 @@ export {
 	scheduleMapViewportRefresh,
 	resetMapViewportCache,
 	requestMapRender
-} from './core/mars3d.js';
+} from './mars2d/core/engine.js';
 
 export {
 	MAP_LAYER_KEYS,
@@ -126,8 +125,10 @@ export {
 	addProvinceMaskLayer,
 	clearProvinceMaskLayer,
 	waitProvinceMaskReady
-} from './core/provinceMaskLayer.js';
+} from './mars2d/core/provinceMaskLayer.js';
 
-export { default as MarsMap } from './components/MarsMap.vue';
+export { default as Mars2dMap } from './mars2d/components/Mars2dMap.vue';
+// 兼容旧名称：业务侧若仍 import { MarsMap } 也能工作（实际为 2D 引擎）
+export { default as MarsMap } from './mars2d/components/Mars2dMap.vue';
 export { default as MapContainer } from './components/MapContainer.vue';
 export { default as MapLoadingOverlay } from './components/MapLoadingOverlay.vue';

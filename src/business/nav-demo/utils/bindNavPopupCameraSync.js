@@ -1,4 +1,4 @@
-import { getLocationMarkerLayer, getMapInstance } from '../../../map-kit/core/mars3d.js';
+import { getLocationMarkerLayer, getMapInstance } from '../../../map-kit/mapApi.js';
 import { isNavPopupAutoPanning, panMapToFitNavPopup } from './fitNavPopupInViewport.js';
 
 export const NAV_POPUP_BASE_OFFSET = { x: 0, y: -10 };

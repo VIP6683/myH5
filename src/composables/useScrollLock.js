@@ -2,7 +2,7 @@ import {
 	lockMapCameraInteraction,
 	unlockMapCameraInteraction,
 	getMapInstance
-} from '../map-kit/core/mars3d.js';
+} from '../map-kit/mapApi.js';
 
 const MAP_HOST_LOCK_CLASS = 'map-host--interaction-locked';
 const BODY_LOCK_CLASS = 'is-scroll-locked';
@@ -139,7 +139,7 @@ function restoreBackgroundScrollers() {
 }
 
 function resolveMapHost() {
-	const viewerContainer = getMapInstance()?.viewer?.container;
+	const viewerContainer = getMapInstance()?.viewer?.container || getMapInstance()?.container;
 	return viewerContainer?.closest?.('.mapHost') || document.querySelector('.mapHost');
 }
 

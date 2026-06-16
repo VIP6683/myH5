@@ -68,6 +68,7 @@ export function setLayerVisible(layerKey, visible, map) {
 	}
 
 	layer.show = !!visible;
+	map?.invalidateSize?.();
 	map?.viewer?.scene?.requestRender?.();
 	return true;
 }

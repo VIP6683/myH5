@@ -1,33 +1,46 @@
 <script setup>
-import { ref } from 'vue';
+import { computed, ref } from 'vue';
 import { useAuthSession } from '../../composables/useAuthSession.js';
 import MineConfirmDialog from './components/MineConfirmDialog.vue';
 import headerBg from '../../assets/images/profile/header-bg.png';
 import rabbitMascot from '../../assets/images/profile/rabbit-mascot.png';
 import defaultAvatar from '../../assets/images/profile/default-avatar.png';
+import packageInfo from '../../../package.json';
 
 const { logout, clearAllData } = useAuthSession();
 
 const profile = {
-	username: '超管账号',
+	username: '超级账号',
+	role: '系统管理员',
 	phone: '13752634636',
 	organization: '国网省公司'
 };
 
+const appVersion = computed(() => `V${packageInfo.version ?? '0.0.0'}`);
+
 const confirmDialogVisible = ref(false);
+const confirmDialogAction = ref(null);
 const confirmDialogState = ref({
 	title: '',
-	message: '',
-	onConfirm: null
+	message: ''
 });
 
 const openConfirmDialog = (title, message, onConfirm) => {
-	confirmDialogState.value = { title, message, onConfirm };
+	confirmDialogState.value = { title, message };
+	confirmDialogAction.value = onConfirm ?? null;
 	confirmDialogVisible.value = true;
 };
 
 const onConfirmDialogConfirm = () => {
-	confirmDialogState.value.onConfirm?.();
+	const action = confirmDialogAction.value;
+	confirmDialogVisible.value = false;
+	confirmDialogAction.value = null;
+	action?.();
+};
+
+const closeConfirmDialog = () => {
+	confirmDialogVisible.value = false;
+	confirmDialogAction.value = null;
 };
 
 const openClearCacheDialog = () => {
@@ -51,39 +64,42 @@ const onLogout = () => {
 	<main class="mine-page">
 		<header class="mine-page__hero">
 			<img class="mine-page__hero-bg" :src="headerBg" alt="" aria-hidden="true" />
+			<div class="mine-page__hero-mask" aria-hidden="true"></div>
 
 			<div class="mine-page__profile">
 				<img class="mine-page__avatar" :src="defaultAvatar" alt="用户头像" />
-				<h1 class="mine-page__username">{{ profile.username }}</h1>
+				<div class="mine-page__profile-meta">
+					<h1 class="mine-page__username">{{ profile.username }}</h1>
+					<p class="mine-page__role">{{ profile.role }}</p>
+				</div>
 			</div>
 
 			<img class="mine-page__rabbit" :src="rabbitMascot" alt="" aria-hidden="true" />
 		</header>
 
 		<div class="mine-page__body">
-			<section class="mine-page__card">
+			<section class="mine-page__card mine-page__card--floating">
 				<div class="mine-page__row">
 					<span class="mine-page__label">联系方式</span>
 					<span class="mine-page__value">{{ profile.phone }}</span>
 				</div>
-				<div class="mine-page__row">
-					<span class="mine-page__label">所属单位</span>
-					<span class="mine-page__value">{{ profile.organization }}</span>
-				</div>
-			</section>
-
-			<section class="mine-page__card">
 				<button type="button" class="mine-page__action" @click="openClearCacheDialog">
 					<span class="mine-page__label">清除缓存</span>
 					<span class="mine-page__chevron" aria-hidden="true">›</span>
 				</button>
+				<div class="mine-page__row">
+					<span class="mine-page__label">当前版本</span>
+					<span class="mine-page__value mine-page__value--accent">{{ appVersion }}</span>
+				</div>
 			</section>
 
 			<div class="mine-page__actions">
 				<button type="button" class="mine-page__btn" @click="onSwitchAccount">
 					切换账号
 				</button>
-				<button type="button" class="mine-page__btn" @click="onLogout">退出登录</button>
+				<button type="button" class="mine-page__logout-text" @click="onLogout">
+					安全退出
+				</button>
 			</div>
 		</div>
 
@@ -94,6 +110,8 @@ const onLogout = () => {
 			confirm-text="确认"
 			cancel-text="取消"
 			@confirm="onConfirmDialogConfirm"
+			@cancel="closeConfirmDialog"
+			@close="closeConfirmDialog"
 		/>
 	</main>
 </template>
@@ -103,16 +121,16 @@ const onLogout = () => {
 	display: flex;
 	flex-direction: column;
 	height: 100%;
-	background: #0a0a0a;
+	background: #060b14;
 	color: #fff;
 	overflow: hidden;
-	gap: 14px;
+	gap: 0;
 }
 
 .mine-page__hero {
 	position: relative;
 	flex-shrink: 0;
-	height: 168px;
+	height: 172px;
 	overflow: hidden;
 }
 
@@ -125,70 +143,68 @@ const onLogout = () => {
 	object-position: center;
 }
 
-.mine-page__hero::after {
-	content: '';
+.mine-page__hero-mask {
 	position: absolute;
 	inset: 0;
-	background: linear-gradient(180deg, rgba(10, 10, 10, 0.1) 0%, rgba(10, 10, 10, 0.55) 100%);
+	background: linear-gradient(
+		180deg,
+		rgba(6, 11, 20, 0.2) 0%,
+		rgba(6, 11, 20, 0.72) 62%,
+		rgba(6, 11, 20, 0.92) 100%
+	);
 	pointer-events: none;
 }
 
 .mine-page__profile {
 	position: relative;
 	z-index: 1;
+	top: 30px;
 	display: flex;
 	align-items: center;
 	gap: 12px;
-	padding: calc(28px + env(safe-area-inset-top, 0px)) 16px 20px;
+	padding: calc(16px + env(safe-area-inset-top, 0px)) 16px 14px;
 }
 
 .mine-page__avatar {
 	flex-shrink: 0;
-	width: 56px;
-	height: 56px;
-	border: 2px solid rgba(255, 255, 255, 0.9);
+	width: 54px;
+	height: 54px;
+	border: 1px solid rgba(255, 255, 255, 0.32);
 	border-radius: 50%;
 	object-fit: cover;
-	background: #1a1a1a;
+	background: #10151d;
+}
+
+.mine-page__profile-meta {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
 }
 
 .mine-page__username {
 	margin: 0;
-	font-size: 20px;
+	font-size: 21px;
 	font-weight: 700;
 	line-height: 1.3;
 	color: #fff;
 }
 
-.mine-page__rabbit {
-	position: absolute;
-	right: 8px;
-	bottom: -4px;
-	z-index: 1;
-	width: 108px;
-	height: auto;
-	pointer-events: none;
-	animation: mine-rabbit-jump 1.8s ease-in-out infinite;
-	transform-origin: center bottom;
+.mine-page__role {
+	margin: 0;
+	font-size: 13px;
+	line-height: 1.3;
+	color: rgba(255, 255, 255, 0.65);
 }
 
-@keyframes mine-rabbit-jump {
-	0%,
-	100% {
-		transform: translateY(0) scale(1);
-	}
-	18% {
-		transform: translateY(-10px) scale(1.02, 0.98);
-	}
-	36% {
-		transform: translateY(0) scale(0.98, 1.02);
-	}
-	52% {
-		transform: translateY(-6px) scale(1.01, 0.99);
-	}
-	68% {
-		transform: translateY(0) scale(1);
-	}
+.mine-page__rabbit {
+	position: absolute;
+	right: 14px;
+	bottom: 6px;
+	z-index: 1;
+	height: 112px;
+	width: auto;
+	opacity: 0.62;
+	pointer-events: none;
 }
 
 .mine-page__body {
@@ -196,38 +212,44 @@ const onLogout = () => {
 	display: flex;
 	flex-direction: column;
 	min-height: 0;
-	padding: 0 16px 16px;
+	padding: 0 16px calc(16px + env(safe-area-inset-bottom, 0px));
 	overflow-y: auto;
 	-webkit-overflow-scrolling: touch;
 }
 
 .mine-page__card {
 	margin-bottom: 12px;
-	border-radius: 10px;
-	background: #1a1a1a;
+	border-radius: 18px;
+	background: #10151d;
+	border: 1px solid rgba(255, 255, 255, 0.06);
+	backdrop-filter: blur(8px);
 	overflow: hidden;
 }
 
-.mine-page__row {
+.mine-page__card--floating {
+	margin-top: 10px;
+	position: relative;
+	z-index: 2;
+}
+
+.mine-page__row,
+.mine-page__action {
 	display: flex;
 	align-items: center;
 	justify-content: space-between;
 	gap: 12px;
-	min-height: 52px;
+	min-height: 56px;
 	padding: 0 16px;
 }
 
+.mine-page__row + .mine-page__action,
+.mine-page__action + .mine-page__row,
 .mine-page__row + .mine-page__row {
 	border-top: 1px solid rgba(255, 255, 255, 0.06);
 }
 
 .mine-page__action {
-	display: flex;
-	align-items: center;
-	justify-content: space-between;
 	width: 100%;
-	min-height: 52px;
-	padding: 0 16px;
 	border: 0;
 	background: transparent;
 	color: inherit;
@@ -238,24 +260,29 @@ const onLogout = () => {
 
 .mine-page__label {
 	font-size: 15px;
+	font-weight: 500;
 	color: #fff;
 }
 
 .mine-page__value {
 	font-size: 14px;
-	color: rgba(255, 255, 255, 0.45);
+	color: rgba(255, 255, 255, 0.65);
 	text-align: right;
 }
 
+.mine-page__value--accent {
+	color: #00d8ff;
+}
+
 .mine-page__chevron {
-	font-size: 22px;
+	font-size: 18px;
 	line-height: 1;
-	color: rgba(255, 255, 255, 0.35);
+	color: rgba(255, 255, 255, 0.4);
 }
 
 .mine-page__actions {
 	margin-top: auto;
-	padding-top: 24px;
+	padding-top: 16px;
 	display: flex;
 	flex-direction: column;
 	gap: 12px;
@@ -263,14 +290,28 @@ const onLogout = () => {
 
 .mine-page__btn {
 	width: 100%;
-	height: 48px;
-	border: 0;
-	border-radius: 10px;
-	background: #1a1a1a;
+	height: 52px;
+	border-radius: 16px;
+	border: 1px solid rgba(0, 216, 255, 0.28);
+	background: #10151d;
+	box-shadow:
+		inset 0 0 0 1px rgba(255, 255, 255, 0.04),
+		0 8px 24px rgba(0, 0, 0, 0.32);
 	color: #fff;
 	font-size: 16px;
-	font-weight: 500;
+	font-weight: 600;
 	line-height: 1;
+	cursor: pointer;
+}
+
+.mine-page__logout-text {
+	align-self: center;
+	border: 0;
+	padding: 4px 10px;
+	background: transparent;
+	font-size: 14px;
+	line-height: 1.3;
+	color: rgba(255, 255, 255, 0.55);
 	cursor: pointer;
 }
 </style>

@@ -9,36 +9,25 @@ defineProps({
 	}
 });
 
-const YEAR_OPTIONS = ['2026', '2025', '2024', '2023'];
+const CURRENT_YEAR = String(new Date().getFullYear());
+const YEAR_OPTIONS = Array.from({ length: 4 }, (_, i) => String(Number(CURRENT_YEAR) - i));
 
-const PHASE_LABELS = [
-	'第一期',
-	'第二期',
-	'第三期',
-	'第四期',
-	'第五期',
-	'第六期',
-	'第七期',
-	'第八期',
-	'第九期',
-	'第十期',
-	'第十一期',
-	'第十二期'
-];
+const PHASE_NUMBERS = Array.from({ length: 12 }, (_, i) => i + 1);
 
-const selectedYear = ref('');
+const selectedYear = ref(CURRENT_YEAR);
 const yearPickerVisible = ref(false);
 
 const yearButtonLabel = computed(() => (selectedYear.value ? `${selectedYear.value}年` : '年份'));
 const hasSelectedYear = computed(() => Boolean(selectedYear.value));
 
 const tableRows = computed(() =>
-	PHASE_LABELS.map((phase) => ({
+	PHASE_NUMBERS.map((phase) => ({
 		phase,
 		total: 20,
 		unverified: 5,
 		pending: 3,
-		completed: 12
+		verified: 12,
+		disposed: 8
 	}))
 );
 
@@ -89,18 +78,22 @@ const onYearConfirm = (year) => {
 					<tr>
 						<th>期数</th>
 						<th>总任务数</th>
+						<th>已核查数</th>
 						<th>未核查数</th>
 						<th>待处置数</th>
-						<th>已完成数</th>
+						<th>已处置数</th>
 					</tr>
 				</thead>
 				<tbody>
 					<tr v-for="row in tableRows" :key="row.phase">
-						<td class="is-phase">{{ row.phase }}</td>
+						<td>
+							<span class="map-data-stats-panel__phase-box">{{ row.phase }}</span>
+						</td>
 						<td>{{ row.total }}</td>
-						<td class="is-warn">{{ row.unverified }}</td>
-						<td class="is-pending">{{ row.pending }}</td>
-						<td class="is-done">{{ row.completed }}</td>
+						<td>{{ row.verified }}</td>
+						<td>{{ row.unverified }}</td>
+						<td>{{ row.pending }}</td>
+						<td>{{ row.disposed }}</td>
 					</tr>
 				</tbody>
 			</table>
@@ -122,7 +115,7 @@ const onYearConfirm = (year) => {
 	z-index: 900;
 	display: flex;
 	flex-direction: column;
-	background: #0a0a0a;
+	background: var(--tabbar-bg, #000);
 	color: #fff;
 	overflow: hidden;
 }
@@ -164,10 +157,10 @@ const onYearConfirm = (year) => {
 		box-shadow 0.15s ease;
 
 	&.is-active {
-		background: rgba(45, 212, 191, 0.1);
-		border-color: rgba(45, 212, 191, 0.35);
+		background: rgba(28, 222, 212, 0.1);
+		border-color: rgba(28, 222, 212, 0.35);
 		color: var(--app-accent, #1cded4);
-		box-shadow: 0 0 0 1px rgba(45, 212, 191, 0.08);
+		box-shadow: 0 0 0 1px rgba(28, 222, 212, 0.08);
 	}
 
 	&:active {
@@ -194,6 +187,7 @@ const onYearConfirm = (year) => {
 .map-data-stats-panel__table-wrap {
 	flex: 1;
 	min-height: 0;
+	overflow-x: hidden;
 	overflow-y: auto;
 	-webkit-overflow-scrolling: touch;
 	overscroll-behavior: contain;
@@ -215,54 +209,62 @@ const onYearConfirm = (year) => {
 
 .map-data-stats-panel__table th,
 .map-data-stats-panel__table td {
-	padding: 15px 6px;
+	padding: 12px 2px;
 	text-align: center;
-	line-height: 1.3;
+	line-height: 1.25;
 	font-weight: 400;
 	border-bottom: 1px solid rgba(255, 255, 255, 0.06);
 }
 
 .map-data-stats-panel__table th {
-	padding-top: 12px;
-	padding-bottom: 12px;
+	padding-top: 10px;
+	padding-bottom: 10px;
 	color: rgba(255, 255, 255, 0.75);
-	font-size: 14px;
+	font-size: 10px;
 	font-weight: 600;
-	letter-spacing: 0.04em;
+	letter-spacing: 0;
+	white-space: nowrap;
 }
 
 .map-data-stats-panel__table td {
-	font-size: 13px;
+	font-size: 12px;
 	color: rgba(255, 255, 255, 0.9);
 	font-variant-numeric: tabular-nums;
 }
 
-.map-data-stats-panel__table td.is-phase {
-	color: rgba(255, 255, 255, 0.95);
-	font-weight: 500;
+.map-data-stats-panel__table tbody tr:nth-child(odd) {
+	background: rgba(255, 255, 255, 0.02);
 }
 
-.map-data-stats-panel__table td.is-warn {
-	color: rgba(255, 255, 255, 0.72);
+.map-data-stats-panel__table tbody tr:nth-child(even) {
+	background: rgba(10, 24, 37, 0.45);
 }
 
-.map-data-stats-panel__table td.is-pending {
-	color: rgba(255, 200, 120, 0.92);
-}
-
-.map-data-stats-panel__table td.is-done {
-	color: var(--app-accent, #1cded4);
+.map-data-stats-panel__phase-box {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 24px;
+	height: 24px;
+	border: 1px solid rgba(0, 216, 255, 0.25);
+	border-radius: 4px;
+	background: #0a1825;
+	color: rgba(255, 255, 255, 0.92);
+	font-size: 12px;
+	font-weight: 600;
+	line-height: 1;
 }
 
 .map-data-stats-panel__table th:first-child,
 .map-data-stats-panel__table td:first-child {
-	width: 22%;
-	text-align: left;
-	padding-left: 16px;
+	width: 13%;
+	text-align: center;
+	padding-left: 0;
+	padding-right: 0;
 }
 
 .map-data-stats-panel__table th:not(:first-child),
 .map-data-stats-panel__table td:not(:first-child) {
-	width: 19.5%;
+	width: 17.4%;
 }
 </style>

@@ -34,13 +34,13 @@ const handleConfirm = () => {
 <template>
 	<MapModalShell
 		v-model:visible="visible"
-		aria-label="系统提示"
+		:aria-label="title"
 		panel-class="system-tip-modal"
 		:shade-opacity="0.45"
 		:close-on-shade="false"
 		@close="emit('close')"
 	>
-		<div class="map-modal-card map-modal-card--decorated">
+		<div class="map-modal-card">
 			<button type="button" class="map-modal-card__close" aria-label="关闭" @click="handleClose">
 				<span>×</span>
 			</button>
@@ -50,7 +50,11 @@ const handleConfirm = () => {
 			<div class="map-modal-card__content" v-html="message" />
 
 			<div class="map-modal-card__actions">
-				<button type="button" class="map-modal-card__btn" @click="handleConfirm">
+				<button
+					type="button"
+					class="map-modal-card__btn map-modal-card__btn--primary map-modal-card__btn--full"
+					@click="handleConfirm"
+				>
 					{{ confirmText }}
 				</button>
 			</div>

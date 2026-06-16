@@ -1,6 +1,21 @@
 <script setup>
 import { computed } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
+import statsIcon from '../../../assets/images/profile/stats.png';
+import statsActiveIcon from '../../../assets/images/profile/stats-active.png';
+import areaIcon from '../../../assets/images/profile/area.png';
+import areaActiveIcon from '../../../assets/images/profile/area-active.png';
+import lineIcon from '../../../assets/images/profile/line.png';
+import lineActiveIcon from '../../../assets/images/profile/line-active.png';
+import mineIcon from '../../../assets/images/profile/mine.png';
+import mineActiveIcon from '../../../assets/images/profile/mine-active.png';
+
+const TAB_ICONS = {
+	stats: { default: statsIcon, active: statsActiveIcon },
+	area: { default: areaIcon, active: areaActiveIcon },
+	line: { default: lineIcon, active: lineActiveIcon },
+	mine: { default: mineIcon, active: mineActiveIcon }
+};
 
 const TAB_ROUTES = {
 	stats: '/statistics',
@@ -56,6 +71,12 @@ function onTabClick(tab) {
 	emit('update:modelValue', tab.id);
 	router.push(path);
 }
+
+function getTabIcon(icon, isActive) {
+	const icons = TAB_ICONS[icon];
+	if (!icons) return '';
+	return isActive ? icons.active : icons.default;
+}
 </script>
 
 <template>
@@ -79,75 +100,12 @@ function onTabClick(tab) {
 						@click="onTabClick(tab)"
 					>
 						<span class="tab-icon-wrap">
-							<span class="tab-icon" aria-hidden="true">
-								<svg
-									v-if="tab.icon === 'stats'"
-									viewBox="0 0 24 24"
-									fill="none"
-									xmlns="http://www.w3.org/2000/svg"
-								>
-									<path
-										d="M6 18V10M12 18V6M18 18V13"
-										stroke="currentColor"
-										stroke-width="1.8"
-										stroke-linecap="round"
-									/>
-								</svg>
-								<svg
-									v-else-if="tab.icon === 'area'"
-									viewBox="0 0 24 24"
-									fill="none"
-									xmlns="http://www.w3.org/2000/svg"
-								>
-									<path
-										d="M5 10l7-4 7 4v9l-7 4-7-4v-9Z"
-										stroke="currentColor"
-										stroke-width="1.8"
-										stroke-linejoin="round"
-									/>
-									<path
-										d="M12 6v17M5 10l7 4 7-4"
-										stroke="currentColor"
-										stroke-width="1.8"
-										stroke-linejoin="round"
-									/>
-								</svg>
-								<svg
-									v-else-if="tab.icon === 'line'"
-									viewBox="0 0 24 24"
-									fill="none"
-									xmlns="http://www.w3.org/2000/svg"
-								>
-									<path
-										d="M4 16l5-8 4 5 7-9"
-										stroke="currentColor"
-										stroke-width="1.8"
-										stroke-linecap="round"
-										stroke-linejoin="round"
-									/>
-								</svg>
-								<svg
-									v-else
-									viewBox="0 0 24 24"
-									fill="none"
-									xmlns="http://www.w3.org/2000/svg"
-								>
-									<circle
-										cx="12"
-										cy="12"
-										r="8.5"
-										stroke="currentColor"
-										stroke-width="1.8"
-									/>
-									<circle cx="12" cy="10" r="2.8" fill="currentColor" />
-									<path
-										d="M7.5 16.2c1.1-1.8 2.8-2.7 4.5-2.7s3.4.9 4.5 2.7"
-										stroke="currentColor"
-										stroke-width="1.8"
-										stroke-linecap="round"
-									/>
-								</svg>
-							</span>
+							<img
+								:src="getTabIcon(tab.icon, activeTab === tab.id)"
+								alt=""
+								class="tab-icon"
+								aria-hidden="true"
+							/>
 							<span v-if="tab.badge" class="tab-badge">{{ tab.badge }}</span>
 						</span>
 						<span class="tab-label">{{ tab.label }}</span>
@@ -169,11 +127,12 @@ function onTabClick(tab) {
 	transform: translate3d(0, 0, 0);
 	pointer-events: auto;
 	box-sizing: border-box;
+	background: var(--tabbar-bg, #000);
 }
 
 .map-floating-tab-bar {
 	width: 100%;
-	background: #141414;
+	background: var(--tabbar-bg, #000);
 	border-top: 1px solid rgba(255, 255, 255, 0.06);
 	padding-bottom: env(safe-area-inset-bottom, 0px);
 }
@@ -198,10 +157,10 @@ function onTabClick(tab) {
 	flex-direction: column;
 	align-items: center;
 	justify-content: center;
-	gap: 4px;
+	gap: 3px;
 	width: 100%;
-	min-height: 56px;
-	padding: 6px 4px 8px;
+	min-height: 52px;
+	padding: 5px 4px 7px;
 	border: 0;
 	border-radius: 0;
 	background: transparent;
@@ -224,21 +183,15 @@ function onTabClick(tab) {
 	display: flex;
 	align-items: center;
 	justify-content: center;
-	width: 24px;
-	height: 24px;
+	width: 20px;
+	height: 20px;
 }
 
 .tab-icon {
-	display: flex;
-	align-items: center;
-	justify-content: center;
-	width: 22px;
-	height: 22px;
-}
-
-.tab-icon svg {
-	width: 100%;
-	height: 100%;
+	display: block;
+	width: 18px;
+	height: 18px;
+	object-fit: contain;
 }
 
 .tab-badge {
@@ -258,7 +211,7 @@ function onTabClick(tab) {
 }
 
 .tab-label {
-	font-size: 11px;
+	font-size: 10px;
 	line-height: 1.2;
 	font-weight: 400;
 	white-space: nowrap;

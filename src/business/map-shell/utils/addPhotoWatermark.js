@@ -42,31 +42,68 @@ function canvasToBlob(canvas, type = 'image/jpeg', quality = 0.92) {
 }
 
 function buildWatermarkLines(options) {
+	const patchNo = options.patchNo || '未知';
 	const inspector = options.inspector || '未知';
 	const shotTime = options.shotTime ? formatShotTime(options.shotTime) : formatShotTime();
+	const distance = options.distance || '未知';
 	const lng = options.lng ?? '';
 	const lat = options.lat ?? '';
-	const deviceName = options.deviceName || '未知设备';
+	const address = options.address || '';
+
+	const coordText = lng !== '' && lat !== '' ? `${lng},${lat}` : '未知';
+	const locationText = address ? `${coordText} ${address}` : coordText;
 
 	return [
-		`巡检人员：${inspector}`,
+		`图斑编号：${patchNo}`,
 		`拍摄时间：${shotTime}`,
-		`经纬度：${lng},${lat}`,
-		`设备名称：${deviceName}`
+		`核查人：${inspector}`,
+		`距图斑中心：${distance}`,
+		`定位：${locationText}`
 	];
 }
 
+function wrapTextLine(ctx, text, maxWidth) {
+	if (!text || ctx.measureText(text).width <= maxWidth) {
+		return [text];
+	}
+
+	const lines = [];
+	let current = '';
+
+	for (const char of text) {
+		const next = current + char;
+		if (ctx.measureText(next).width > maxWidth && current) {
+			lines.push(current);
+			current = char;
+		} else {
+			current = next;
+		}
+	}
+
+	if (current) {
+		lines.push(current);
+	}
+
+	return lines.length ? lines : [text];
+}
+
+function expandWatermarkLines(ctx, lines, maxTextWidth) {
+	return lines.flatMap((line) => wrapTextLine(ctx, line, maxTextWidth));
+}
+
 function drawWatermark(ctx, canvas, lines) {
-	const padding = Math.max(12, Math.round(canvas.width * 0.02));
-	const fontSize = Math.max(18, Math.round(canvas.width * 0.028));
-	const lineHeight = Math.round(fontSize * 1.45);
+	const padding = Math.max(8, Math.round(canvas.width * 0.014));
+	const fontSize = Math.max(12, Math.round(canvas.width * 0.018));
+	const lineHeight = Math.round(fontSize * 1.4);
+	const maxTextWidth = Math.max(160, Math.round(canvas.width * 0.72));
 
 	ctx.font = `500 ${fontSize}px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif`;
 	ctx.textBaseline = 'alphabetic';
 
-	const textWidth = Math.max(...lines.map((line) => ctx.measureText(line).width));
-	const boxWidth = textWidth + padding * 2;
-	const boxHeight = lines.length * lineHeight + padding * 2;
+	const wrappedLines = expandWatermarkLines(ctx, lines, maxTextWidth);
+	const textWidth = Math.max(...wrappedLines.map((line) => ctx.measureText(line).width));
+	const boxWidth = Math.min(canvas.width - padding * 2, textWidth + padding * 2);
+	const boxHeight = wrappedLines.length * lineHeight + padding * 2;
 	const boxX = padding;
 	const boxY = canvas.height - boxHeight - padding;
 
@@ -74,7 +111,7 @@ function drawWatermark(ctx, canvas, lines) {
 	ctx.fillRect(boxX, boxY, boxWidth, boxHeight);
 
 	ctx.fillStyle = '#ffffff';
-	lines.forEach((line, index) => {
+	wrappedLines.forEach((line, index) => {
 		const y = boxY + padding + (index + 1) * lineHeight - Math.round(fontSize * 0.2);
 		ctx.fillText(line, boxX + padding, y);
 	});
@@ -84,11 +121,13 @@ function drawWatermark(ctx, canvas, lines) {
  * 使用 Canvas 为照片添加巡检水印
  * @param {File|Blob} imageFile
  * @param {{
+ *   patchNo?: string,
  *   inspector?: string,
  *   shotTime?: Date|string,
+ *   distance?: string,
  *   lng?: number|string,
  *   lat?: number|string,
- *   deviceName?: string
+ *   address?: string
  * }} [options]
  * @returns {Promise<File>}
  */

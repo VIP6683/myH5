@@ -8,6 +8,7 @@ import {
 	LOCATION_ERROR
 } from '../utils/locationPermission.js';
 import { isWeChatEnv } from '../business/nav-demo/utils/wechatJssdk.js';
+import { ensureDeviceOrientationPermission } from '../utils/deviceHeading.js';
 import { isMobileDebugEnabled, logMobileDebug, logMobileDebugError } from '../utils/mobileDebugConsole.js';
 
 /**
@@ -110,6 +111,13 @@ export function useLocationRequest(handlers = {}) {
 				handlers.onError?.(error, message);
 				settlePending((_, rej) => rej?.(error));
 				return;
+			}
+
+			// iOS 13+ 必须在用户点击的同步调用链里申请陀螺仪权限，不能等定位完成后再申请
+			const orientationGranted = await ensureDeviceOrientationPermission();
+			logMobileDebug('orientation:permission', { granted: orientationGranted });
+			if (!orientationGranted) {
+				openDialog('orientationDenied');
 			}
 
 			await fetchLocation();
