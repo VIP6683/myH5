@@ -1,0 +1,33 @@
+/* 地图壳层 UI 设计令牌 — TabBar / Toolbar / 面板共用 */
+
+:root {
+	--app-primary: #047fe8;
+
+	--app-primary-soft: rgba(4, 127, 232, 0.08);
+
+	--app-accent: #1cded4;
+
+	--app-accent-soft: rgba(45, 212, 191, 0.12);
+
+	--app-text-2: #333;
+
+	--app-text-muted: #8a939e;
+
+	--app-danger: #e50000;
+
+	--app-radius-md: 6px;
+
+	--app-radius-dock: 8px;
+
+	--app-card-border: #e8ecf0;
+
+	--app-card-bg-strong: rgba(255, 255, 255, 0.92);
+
+	--app-backdrop-blur: 4px;
+
+	--app-shadow-card: 0 0 8px rgba(0, 0, 0, 0.1);
+
+	--tabbar-bg: #000;
+
+	--tabbar-shadow-float: none;
+}

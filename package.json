@@ -1,0 +1,26 @@
+{
+  "name": "myh5",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host",
+    "build": "vite build",
+    "preview": "vite preview --host"
+  },
+  "dependencies": {
+    "mars3d": "^3.11.4",
+    "mars3d-cesium": "^1.142.1",
+    "vconsole": "^3.15.1",
+    "vue": "^3.5.34",
+    "vue-router": "^4.6.4"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-basic-ssl": "^2.3.0",
+    "@vitejs/plugin-vue": "^6.0.6",
+    "autoprefixer": "^10.5.0",
+    "postcss-px-to-viewport-8-plugin": "^1.2.5",
+    "sass-embedded": "^1.100.0",
+    "vite": "^8.0.12"
+  }
+}

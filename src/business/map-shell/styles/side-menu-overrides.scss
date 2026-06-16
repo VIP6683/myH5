@@ -1,0 +1,326 @@
+/* 右侧控件 — 36px 统一网格（375 设计稿） */
+.sideMenu {
+	width: 36px;
+	margin-left: -5px;
+}
+
+.sideMenu ul li {
+	width: 36px;
+}
+
+.sideMenu ul li i {
+	width: 26px;
+	margin-top: 3px;
+}
+
+#selectTypeList {
+	height: calc(152px - 1px);
+	overflow: hidden;
+}
+
+.sideMenu ul li em {
+	font-size: 9px;
+	font-style: inherit;
+	text-align: center;
+	display: block;
+	width: 36px;
+	line-height: 1.15;
+	padding-bottom: 2px;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.sideMenu ul.selectType div li {
+	height: 40px;
+}
+
+.sideMenu ul li span {
+	margin-left: 0;
+	margin-top: 0;
+	margin-bottom: 0;
+}
+
+.sideMenu ul.selectType li span {
+	width: 36px;
+	height: 28px;
+	margin: 1px auto 0;
+	background-size: 72px auto;
+}
+
+.sideMenu ul li.more span {
+	width: 36px;
+	height: 36px;
+	background-size: 72px auto;
+	background-position-y: calc(36px * -39 - 2px);
+	margin-left: 0;
+}
+
+#selectTypeList li.all.cur {
+	color: #047fe8;
+}
+#selectTypeList li.scenic.cur {
+	color: #f0940b;
+}
+#selectTypeList li.toilet.cur {
+	color: #2eae06;
+}
+#selectTypeList li.server.cur {
+	color: #d9104e;
+}
+#selectTypeList li.restaurant.cur {
+	color: #e71d73;
+}
+#selectTypeList li.hostel.cur {
+	color: #5321ba;
+}
+#selectTypeList li.shop.cur {
+	color: #e58c00;
+}
+#selectTypeList li.carpark.cur {
+	color: #09bff3;
+}
+#selectTypeList li.help.cur {
+	color: #e00000;
+}
+#selectTypeList li.station.cur {
+	color: #0283e6;
+}
+#selectTypeList li.export.cur {
+	color: #0ace05;
+}
+#selectTypeList li.Ticketing.cur {
+	color: #1693d4;
+}
+#selectTypeList li.police.cur {
+	color: #1e83f3;
+}
+#selectTypeList li.guide.cur {
+	color: #caab1a;
+}
+#selectTypeList li.ticketCheck.cur {
+	color: #00ced6;
+}
+#selectTypeList li.observation.cur {
+	color: #00ced6;
+}
+#selectTypeList li.luggage.cur {
+	color: #32b9b1;
+}
+#selectTypeList li.tourist.cur {
+	color: #f700ba;
+}
+#selectTypeList li.rides.cur {
+	color: #f79100;
+}
+#selectTypeList li.infant.cur {
+	color: #d042ff;
+}
+#selectTypeList li.gasoline.cur {
+	color: #ba3636;
+}
+#selectTypeList li.bank.cur {
+	color: #daa504;
+}
+#selectTypeList li.Sschool.cur {
+	color: #007de7;
+}
+#selectTypeList li.government.cur {
+	color: #e50000;
+}
+#selectTypeList li.hospital.cur {
+	color: #e50000;
+}
+#selectTypeList li.garden.cur {
+	color: #31b609;
+}
+#selectTypeList li.village.cur {
+	color: #ae9700;
+}
+#selectTypeList li.mountain.cur {
+	color: #3e8d1b;
+}
+#selectTypeList li.pavilion.cur {
+	color: #44b621;
+}
+#selectTypeList li.temple.cur {
+	color: #8a7751;
+}
+#selectTypeList li.tea.cur {
+	color: #978664;
+}
+#selectTypeList li.live.cur {
+	color: #42d3c1;
+}
+#selectTypeList li.monitor.cur {
+	color: #1bb1e7;
+}
+#selectTypeList li.office.cur {
+	color: #1bb1e7;
+}
+#selectTypeList li.scalator.cur {
+	color: #1bb1e7;
+}
+#selectTypeList li.cableCar.cur {
+	color: #42d3c1;
+}
+#selectTypeList li.ancestralHall.cur {
+	color: #2a577a;
+}
+#selectTypeList li.elevator.cur {
+	color: #1bb1e7;
+}
+#selectTypeList li.refuge.cur {
+	color: #018c49;
+}
+#selectTypeList li.drink.cur {
+	color: #b2b21a;
+}
+#selectTypeList li.time.cur {
+	color: #1c6abb;
+}
+#selectTypeList li.supply.cur {
+	color: #ffd528;
+}
+#selectTypeList li.water.cur {
+	color: #00bdbf;
+}
+#selectTypeList li.other.cur {
+	color: #f7a01c;
+}
+
+.sideMenu #tutorialCard,
+.sideMenu #tutorialCard li.tutorialCard {
+	height: auto;
+}
+
+.sideMenu ul li.tutorialCard span.help-mark {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	width: 24px;
+	height: auto !important;
+	aspect-ratio: 1;
+	margin: 2px auto;
+	background-image: none !important;
+	background: linear-gradient(180deg, #ffb347 0%, #ff8c1a 100%) !important;
+	border-radius: 50%;
+	color: #fff;
+	font-size: 14px;
+	font-weight: 700;
+	line-height: 1;
+	box-shadow: 0 1px 4px rgba(255, 140, 26, 0.35);
+}
+
+.sideMenu ul li.myLocationBlock span {
+	background-image: none !important;
+	position: relative;
+}
+
+.sideMenu ul li.myLocationBlock span::before {
+	content: '';
+	position: absolute;
+	top: 50%;
+	left: 50%;
+	width: 15px;
+	height: 15px;
+	border: 2px solid #047fe8;
+	border-radius: 50%;
+	transform: translate(-50%, -50%);
+	box-shadow: 0 0 0 2px rgba(4, 127, 232, 0.18);
+}
+
+.sideMenu ul li.myLocationBlock span::after {
+	content: '';
+	position: absolute;
+	top: 50%;
+	left: 50%;
+	width: 4px;
+	height: 4px;
+	background: #047fe8;
+	border-radius: 50%;
+	transform: translate(-50%, -50%);
+}
+
+.sideMenu ul li.myLocationBlock.locating span::before {
+	animation: sideMenuLocatePulse 1.2s ease-out infinite;
+}
+
+@keyframes sideMenuLocatePulse {
+	0% {
+		box-shadow: 0 0 0 0 rgba(4, 127, 232, 0.35);
+	}
+	70% {
+		box-shadow: 0 0 0 8px rgba(4, 127, 232, 0);
+	}
+	100% {
+		box-shadow: 0 0 0 0 rgba(4, 127, 232, 0);
+	}
+}
+
+.sideMenu ul li::marker {
+	content: '';
+	display: none;
+}
+
+/* 分类列表图标 28px 高，雪碧行距同步 */
+.sideMenu ul.selectType li.all span { background-position-y: calc(28px * -30); }
+.sideMenu ul.selectType li.scenic span { background-position-y: calc(28px * -1); }
+.sideMenu ul.selectType li.toilet span { background-position-y: calc(28px * -2); }
+.sideMenu ul.selectType li.server span { background-position-y: calc(28px * -3); }
+.sideMenu ul.selectType li.restaurant span { background-position-y: calc(28px * -4); }
+.sideMenu ul.selectType li.hostel span { background-position-y: calc(28px * -5); }
+.sideMenu ul.selectType li.shop span { background-position-y: calc(28px * -6); }
+.sideMenu ul.selectType li.carpark span { background-position-y: calc(28px * -7); }
+.sideMenu ul.selectType li.help span { background-position-y: calc(28px * -8); }
+.sideMenu ul.selectType li.station span { background-position-y: calc(28px * -9); }
+.sideMenu ul.selectType li.export span { background-position-y: calc(28px * -10); }
+.sideMenu ul.selectType li.Ticketing span { background-position-y: calc(28px * -11); }
+.sideMenu ul.selectType li.police span { background-position-y: calc(28px * -12); }
+.sideMenu ul.selectType li.guide span { background-position-y: calc(28px * -13); }
+.sideMenu ul.selectType li.ticketCheck span { background-position-y: calc(28px * -14); }
+.sideMenu ul.selectType li.observation span { background-position-y: calc(28px * -15); }
+.sideMenu ul.selectType li.luggage span { background-position-y: calc(28px * -16); }
+.sideMenu ul.selectType li.tourist span { background-position-y: calc(28px * -17); }
+.sideMenu ul.selectType li.rides span { background-position-y: calc(28px * -18); }
+.sideMenu ul.selectType li.infant span { background-position-y: calc(28px * -19); }
+.sideMenu ul.selectType li.gasoline span { background-position-y: calc(28px * -20); }
+.sideMenu ul.selectType li.bank span { background-position-y: calc(28px * -21); }
+.sideMenu ul.selectType li.Sschool span { background-position-y: calc(28px * -22); }
+.sideMenu ul.selectType li.government span { background-position-y: calc(28px * -23); }
+.sideMenu ul.selectType li.hospital span { background-position-y: calc(28px * -24); }
+.sideMenu ul.selectType li.garden span { background-position-y: calc(28px * -25); }
+.sideMenu ul.selectType li.village span { background-position-y: calc(28px * -26); }
+.sideMenu ul.selectType li.mountain span { background-position-y: calc(28px * -27); }
+.sideMenu ul.selectType li.pavilion span { background-position-y: calc(28px * -28); }
+.sideMenu ul.selectType li.temple span { background-position-y: calc(28px * -29); }
+
+@media screen and (min-width: 900px) {
+	.sideMenu {
+		width: 36px;
+		margin-left: -5px;
+	}
+
+	#selectTypeList {
+		height: calc(152px - 1px);
+	}
+
+	.sideMenu ul li {
+		width: 36px;
+	}
+
+	.sideMenu ul.selectType div li {
+		height: 40px;
+	}
+
+	.sideMenu ul li em {
+		font-size: 9px;
+		width: 36px;
+	}
+
+	.sideMenu ul li.more span {
+		margin-left: 0;
+		width: 36px;
+		background-position-y: calc(36px * -39 - 2px);
+	}
+}

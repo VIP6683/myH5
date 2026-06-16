@@ -1,0 +1,27 @@
+{
+	"type": "FeatureCollection",
+	"features": [
+		{
+			"type": "Feature",
+			"properties": {
+				"adcode": 430000,
+				"name": "湖南省"
+			},
+			"geometry": {
+				"type": "MultiPolygon",
+				"coordinates": [
+					[
+						[
+							[108.792209, 24.636548],
+							[108.792209, 30.125989],
+							[114.260116, 30.125989],
+							[114.260116, 24.636548],
+							[108.792209, 24.636548]
+						]
+					]
+				]
+			}
+		}
+	]
+}
+

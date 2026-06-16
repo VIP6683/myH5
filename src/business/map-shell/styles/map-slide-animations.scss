@@ -1,0 +1,181 @@
+/* 地图 UI 出场/离场动效（对齐 pixelsay sideMenu 方案） */
+
+@keyframes mapFadeInRight {
+	0% {
+		opacity: 0;
+		transform: translate3d(100%, 0, 0);
+	}
+	to {
+		opacity: 1;
+		transform: translate3d(0, 0, 0);
+	}
+}
+
+@keyframes mapFadeInTop {
+	0% {
+		opacity: 0;
+		transform: translate3d(0, 100%, 0);
+	}
+	to {
+		opacity: 1;
+		transform: translate3d(0, 0, 0);
+	}
+}
+
+@keyframes mapFadeInBottom {
+	0% {
+		opacity: 0;
+		transform: translate3d(0, -100%, 0);
+	}
+	to {
+		opacity: 1;
+		transform: translate3d(0, 0, 0);
+	}
+}
+
+@keyframes mapInRight {
+	0% {
+		opacity: 0;
+		transform: translate3d(150%, 0, 0);
+	}
+	to {
+		opacity: 1;
+		transform: translate3d(0, 0, 0);
+	}
+}
+
+@keyframes mapOutRight {
+	0% {
+		opacity: 1;
+		transform: translate3d(0, 0, 0);
+	}
+	to {
+		opacity: 1;
+		transform: translate3d(150%, 0, 0);
+	}
+}
+
+@keyframes mapInTop {
+	0% {
+		opacity: 0;
+		transform: translate3d(0, -120%, 0);
+	}
+	to {
+		opacity: 1;
+		transform: translate3d(0, 0, 0);
+	}
+}
+
+@keyframes mapOutTop {
+	0% {
+		opacity: 1;
+		transform: translate3d(0, 0, 0);
+	}
+	to {
+		opacity: 0;
+		transform: translate3d(0, -120%, 0);
+	}
+}
+
+@keyframes mapInBottom {
+	0% {
+		opacity: 0;
+		transform: translate3d(0, 120%, 0);
+	}
+	to {
+		opacity: 1;
+		transform: translate3d(0, 0, 0);
+	}
+}
+
+@keyframes mapOutBottom {
+	0% {
+		opacity: 1;
+		transform: translate3d(0, 0, 0);
+	}
+	to {
+		opacity: 0;
+		transform: translate3d(0, 120%, 0);
+	}
+}
+
+@keyframes mapInLeft {
+	0% {
+		opacity: 0;
+		transform: translate3d(-120%, 0, 0);
+	}
+	to {
+		opacity: 1;
+		transform: translate3d(0, 0, 0);
+	}
+}
+
+@keyframes mapOutLeft {
+	0% {
+		opacity: 1;
+		transform: translate3d(0, 0, 0);
+	}
+	to {
+		opacity: 1;
+		transform: translate3d(-120%, 0, 0);
+	}
+}
+
+.map-slide--fade-in-right,
+.map-slide--fade-in-top,
+.map-slide--fade-in-bottom,
+.map-slide--in-right,
+.map-slide--out-right,
+.map-slide--in-top,
+.map-slide--out-top,
+.map-slide--in-bottom,
+.map-slide--out-bottom,
+.map-slide--in-left,
+.map-slide--out-left {
+	will-change: transform, opacity;
+	backface-visibility: hidden;
+}
+
+.map-slide--fade-in-right {
+	animation: mapFadeInRight 0.5s linear 0s 1 forwards;
+}
+
+.map-slide--fade-in-top {
+	animation: mapFadeInTop 0.5s linear 0s 1 forwards;
+}
+
+.map-slide--fade-in-bottom {
+	animation: mapFadeInBottom 0.5s linear 0s 1 forwards;
+}
+
+.map-slide--in-right {
+	animation: mapInRight 0.2s linear 0s 1 forwards;
+}
+
+.map-slide--out-right {
+	animation: mapOutRight 0.3s linear 0s 1 forwards;
+}
+
+.map-slide--in-top {
+	animation: mapInTop 0.2s linear 0s 1 forwards;
+}
+
+.map-slide--out-top {
+	animation: mapOutTop 0.3s linear 0s 1 forwards;
+}
+
+.map-slide--in-bottom {
+	animation: mapInBottom 0.2s linear 0s 1 forwards;
+}
+
+.map-slide--out-bottom {
+	animation: mapOutBottom 0.3s linear 0s 1 forwards;
+}
+
+.map-slide--in-left {
+	animation: mapInLeft 0.2s linear 0s 1 forwards;
+}
+
+.map-slide--out-left {
+	animation: mapOutLeft 0.3s linear 0s 1 forwards;
+}
