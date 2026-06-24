@@ -1,7 +1,7 @@
 /**
- * 地图核心模块（当前项目使用 Mars2D，可拷贝到其他项目）
+ * 地图核心模块（Mars2D / Leaflet）
  *
- * 职责：地图实例、配置读取、图层显隐、测距/复位/2D3D、标记打点、统一事件
+ * 职责：地图实例、配置读取、图层显隐、测距、标记打点、统一事件
  * 不包含：业务侧栏、底栏、教程、系统弹框等（见 src/business/）
  *
  * 迁移清单：
@@ -33,7 +33,7 @@ export {
 	getMapSceneCenter,
 	getMapSceneOptions
 } from './config/mapSceneConfig.js';
-export { getAppMapConfig, getMapTokens, buildMapLayerOptions, usesBackendLayers } from './config/runtimeConfig.js';
+export { getAppMapConfig, getMapTokens, buildMapLayerOptions, usesBackendLayers, usesMosaicBasemap } from './config/runtimeConfig.js';
 
 export {
 	filterLayerTreeByIds,
@@ -53,17 +53,14 @@ export {
 } from './core/mapEvents.js';
 
 export {
-	initMars3dTokens,
+	initMapTokens,
 	mergeMapOptions,
 	getDefaultMapOptions,
 	setMapInstance,
-	setCompassParentContainer,
 	getMapInstance,
 	isMapRenderPaused,
 	pauseMapRender,
 	resumeMapRender,
-	setActiveRoute,
-	getActiveInitialView,
 	disableMapContextMenu,
 	stopMeasureDrawing,
 	endMeasureDrawing,
@@ -74,11 +71,8 @@ export {
 	getMeasureState,
 	onMeasureToolbarStateChange,
 	startDistanceMeasure,
-	startHeightMeasure,
 	startAreaMeasure,
-	startAngleMeasure,
 	startPointMeasure,
-	startSectionMeasure,
 	getLocationMarkerLayer,
 	clearLocationMarkers,
 	removeLocationMarker,
@@ -89,17 +83,11 @@ export {
 	getGeolocationErrorMessage,
 	queryGeolocationPermission,
 	GEOLOCATION_PERMISSION_TIP,
-	resetMapView,
-	zoomMapIn,
-	zoomMapOut,
-	applyRouteCamera,
 	destroyMapTools,
 	destroyMapInstance,
 	canReuseMapInstance,
-	to2d,
-	to3d,
-	showCompass,
-	hideCompass,
+	lockMapCameraInteraction,
+	unlockMapCameraInteraction,
 	scheduleMapViewportRefresh,
 	resetMapViewportCache,
 	requestMapRender
@@ -128,7 +116,5 @@ export {
 } from './mars2d/core/provinceMaskLayer.js';
 
 export { default as Mars2dMap } from './mars2d/components/Mars2dMap.vue';
-// 兼容旧名称：业务侧若仍 import { MarsMap } 也能工作（实际为 2D 引擎）
-export { default as MarsMap } from './mars2d/components/Mars2dMap.vue';
 export { default as MapContainer } from './components/MapContainer.vue';
 export { default as MapLoadingOverlay } from './components/MapLoadingOverlay.vue';

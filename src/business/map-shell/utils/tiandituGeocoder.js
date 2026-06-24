@@ -8,7 +8,7 @@ function resolveTiandituKey() {
 		return tianditu[0];
 	}
 
-	const token = globalThis.mars3d?.Token?.tianditu;
+	const token = globalThis.mars2d?.Token?.tianditu;
 	if (Array.isArray(token) && token.length) {
 		return token[0];
 	}

@@ -37,6 +37,7 @@ const emit = defineEmits(['close', 'after-close']);
 
 const mapUiOverlay = inject(MAP_UI_OVERLAY_KEY, null);
 const { rendered, panelAnimClass, playEnter, playLeave, dispose } = useMapModalAnim();
+let overlayEntered = false;
 
 const onShadeClick = () => {
 	if (props.closeOnShade) {
@@ -48,6 +49,7 @@ watch(visible, (open) => {
 	if (open) {
 		if (props.hideMapUi) {
 			mapUiOverlay?.enterOverlay();
+			overlayEntered = true;
 		}
 		playEnter();
 		return;
@@ -57,12 +59,17 @@ watch(visible, (open) => {
 	playLeave(() => {
 		if (props.hideMapUi) {
 			mapUiOverlay?.exitOverlay();
+			overlayEntered = false;
 		}
 		emit('after-close');
 	});
 });
 
 onBeforeUnmount(() => {
+	if (overlayEntered && props.hideMapUi) {
+		mapUiOverlay?.exitOverlay();
+		overlayEntered = false;
+	}
 	dispose();
 });
 </script>

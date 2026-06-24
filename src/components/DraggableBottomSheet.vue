@@ -1,10 +1,17 @@
 <script setup>
-import { computed, onBeforeUnmount, ref, watch } from 'vue';
+import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue';
 import { useBottomSheetSnap } from '../composables/useBottomSheetSnap.js';
 import { usePopupLayer } from '../composables/usePopupLayer.js';
 
+const APP_CONTENT_SELECTOR = '#app-content';
+
 const visible = defineModel('visible', { type: Boolean, default: false });
 const expanded = defineModel('expanded', { type: Boolean, default: false });
+const snap = defineModel('snap', {
+	type: String,
+	default: 'collapsed',
+	validator: (value) => ['collapsed', 'peek', 'expanded'].includes(value)
+});
 
 const props = defineProps({
 	ariaLabel: {
@@ -19,9 +26,17 @@ const props = defineProps({
 		type: [Number, String],
 		default: '42vh'
 	},
+	collapsedHeight: {
+		type: [Number, String],
+		default: 20
+	},
 	topInset: {
 		type: [Number, String],
 		default: 'env(safe-area-inset-top, 0px)'
+	},
+	bottomInset: {
+		type: [Number, String],
+		default: 0
 	},
 	closeOnShade: {
 		type: Boolean,
@@ -40,10 +55,29 @@ const props = defineProps({
 		default: 'dark',
 		validator: (value) => ['light', 'dark'].includes(value)
 	},
+	bodyScroll: {
+		type: String,
+		default: 'auto',
+		validator: (value) => ['auto', 'inner'].includes(value)
+	},
 	/** 半屏时允许操作背后地图与顶栏，全屏后再锁定背景 */
 	peekPassThrough: {
 		type: Boolean,
 		default: false
+	},
+	/** 常驻停靠：默认折叠横条，筛选等场景不整页弹出 */
+	persistent: {
+		type: Boolean,
+		default: false
+	},
+	allowDrag: {
+		type: Boolean,
+		default: true
+	},
+	dragSurface: {
+		type: String,
+		default: 'auto',
+		validator: (value) => ['auto', 'panel', 'header'].includes(value)
 	}
 });
 
@@ -53,6 +87,7 @@ const rendered = ref(false);
 const animPhase = ref('');
 const dragEnabled = ref(false);
 const enterOffsetPx = ref(null);
+const suppressHandleClick = ref(false);
 
 let leaveTimer = null;
 
@@ -62,6 +97,7 @@ const {
 	panelRef,
 	bodyRef,
 	headerRef,
+	handleRef,
 	isDragging,
 	panelStyle,
 	metrics,
@@ -70,10 +106,21 @@ const {
 	resetDrag
 } = useBottomSheetSnap({
 	expanded,
+	snap,
+	tripleSnap: props.persistent,
+	dragSurface: computed(() =>
+		props.dragSurface === 'auto' ? (props.persistent ? 'header' : 'panel') : props.dragSurface
+	),
 	peekHeight: computed(() => props.peekHeight),
+	collapsedHeight: computed(() => props.collapsedHeight),
 	topInset: computed(() => props.topInset),
-	enabled: dragEnabled
+	bottomInset: computed(() => props.bottomInset),
+	enabled: computed(() => dragEnabled.value && props.allowDrag)
 });
+
+const isFullyExpanded = computed(() =>
+	props.persistent ? snap.value === 'expanded' : expanded.value
+);
 
 const rootStyle = computed(() => ({
 	zIndex: props.zIndex
@@ -84,7 +131,14 @@ const shadeBgStyle = computed(() => ({
 }));
 
 const isPeekPassThroughActive = computed(
-	() => props.peekPassThrough && rendered.value && !expanded.value
+	() => props.peekPassThrough && rendered.value && !isFullyExpanded.value
+);
+
+/** 常驻抽屉折叠/半屏时遮罩不拦截地图手势（双指缩放等） */
+const isShadePassThrough = computed(
+	() =>
+		isPeekPassThroughActive.value ||
+		(props.persistent && rendered.value && snap.value !== 'expanded')
 );
 
 const panelClasses = computed(() => [
@@ -94,19 +148,21 @@ const panelClasses = computed(() => [
 	animPhase.value,
 	{
 		'is-dragging': isDragging.value,
-		'is-expanded': expanded.value
+		'is-expanded': isFullyExpanded.value,
+		'is-collapsed': props.persistent && snap.value === 'collapsed',
+		'is-inner-scroll': props.bodyScroll === 'inner'
 	}
 ]);
 
 const effectivePanelStyle = computed(() => {
-	if (animPhase.value === 'draggable-bottom-sheet--leave') {
+	if (!props.persistent && animPhase.value === 'draggable-bottom-sheet--leave') {
 		return {
 			...panelStyle.value,
 			transform: 'translate3d(0, 100%, 0)'
 		};
 	}
 
-	if (enterOffsetPx.value != null) {
+	if (!props.persistent && enterOffsetPx.value != null) {
 		return {
 			...panelStyle.value,
 			transform: `translate3d(0, ${enterOffsetPx.value}px, 0)`
@@ -124,10 +180,19 @@ const clearLeaveTimer = () => {
 };
 
 const close = () => {
+	if (props.persistent) {
+		snap.value = 'collapsed';
+		return;
+	}
 	visible.value = false;
 };
 
 const onShadeClick = () => {
+	if (props.persistent && snap.value === 'expanded') {
+		snap.value = 'peek';
+		return;
+	}
+
 	if (props.closeOnShade) {
 		close();
 	}
@@ -138,7 +203,7 @@ const syncPeekScrollLock = () => {
 		return;
 	}
 
-	if (expanded.value) {
+	if (isFullyExpanded.value) {
 		popupLayer.acquire();
 		return;
 	}
@@ -146,7 +211,35 @@ const syncPeekScrollLock = () => {
 	popupLayer.release();
 };
 
+const mountPersistent = () => {
+	clearLeaveTimer();
+	rendered.value = true;
+	animPhase.value = '';
+	dragEnabled.value = true;
+	enterOffsetPx.value = null;
+	suppressHandleClick.value = false;
+	resetDrag();
+	recalcMetrics();
+	syncPeekScrollLock();
+
+	nextTick(() => {
+		mountPanelDrag();
+		recalcMetrics();
+		requestAnimationFrame(() => {
+			recalcMetrics();
+			requestAnimationFrame(() => {
+				recalcMetrics();
+			});
+		});
+	});
+};
+
 const playEnter = () => {
+	if (props.persistent) {
+		mountPersistent();
+		return;
+	}
+
 	clearLeaveTimer();
 	rendered.value = true;
 	if (!props.peekPassThrough) {
@@ -181,17 +274,49 @@ const playLeave = (onDone) => {
 	dragEnabled.value = false;
 	enterOffsetPx.value = null;
 	resetDrag();
+
+	if (props.persistent) {
+		rendered.value = false;
+		animPhase.value = '';
+		popupLayer.release();
+		onDone?.();
+		return;
+	}
+
 	animPhase.value = 'draggable-bottom-sheet--leave';
 
 	leaveTimer = setTimeout(() => {
 		rendered.value = false;
 		animPhase.value = '';
-		expanded.value = false;
+		if (!props.persistent) {
+			expanded.value = false;
+		}
 		popupLayer.release();
 		leaveTimer = null;
 		onDone?.();
 	}, 280);
 };
+
+const onHandlePointerDown = () => {
+	suppressHandleClick.value = false;
+};
+
+const onHandleClick = () => {
+	if (!props.persistent || suppressHandleClick.value) {
+		suppressHandleClick.value = false;
+		return;
+	}
+
+	if (snap.value === 'collapsed') {
+		snap.value = 'peek';
+	}
+};
+
+watch(isDragging, (dragging) => {
+	if (dragging) {
+		suppressHandleClick.value = true;
+	}
+});
 
 watch(visible, (open) => {
 	if (open) {
@@ -205,9 +330,9 @@ watch(visible, (open) => {
 			emit('after-close');
 		});
 	}
-});
+}, { immediate: true });
 
-watch(expanded, () => {
+watch(isFullyExpanded, () => {
 	syncPeekScrollLock();
 });
 
@@ -218,18 +343,24 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-	<Teleport to="body">
+	<Teleport :to="APP_CONTENT_SELECTOR">
 		<div
 			v-if="rendered"
 			class="draggable-bottom-sheet"
-			:class="[animPhase, { 'draggable-bottom-sheet--peek-pass-through': isPeekPassThroughActive }]"
+			:class="[
+				animPhase,
+				{
+					'draggable-bottom-sheet--persistent': persistent,
+					'draggable-bottom-sheet--peek-pass-through': isPeekPassThroughActive
+				}
+			]"
 			:style="rootStyle"
 			role="presentation"
 			@wheel.stop
 		>
 			<div
 				class="draggable-bottom-sheet__shade"
-				:class="{ 'is-pass-through': isPeekPassThroughActive }"
+				:class="{ 'is-pass-through': isShadePassThrough }"
 				:style="shadeBgStyle"
 				@click="onShadeClick"
 			/>
@@ -242,22 +373,24 @@ onBeforeUnmount(() => {
 				aria-modal="true"
 				:aria-label="ariaLabel"
 			>
-				<div class="draggable-bottom-sheet__handle-wrap" data-bottom-sheet-handle>
+				<div
+					ref="handleRef"
+					class="draggable-bottom-sheet__handle-wrap"
+					data-bottom-sheet-handle
+					@pointerdown="onHandlePointerDown"
+					@click="onHandleClick"
+				>
 					<span class="draggable-bottom-sheet__handle" aria-hidden="true" />
 				</div>
 
-				<header
-					v-if="$slots.header"
-					ref="headerRef"
-					class="draggable-bottom-sheet__header"
-				>
+				<header v-if="$slots.header" ref="headerRef" class="draggable-bottom-sheet__header">
 					<slot name="header" />
 				</header>
 
 				<div
 					ref="bodyRef"
 					class="draggable-bottom-sheet__body"
-					:class="{ 'is-scrollable': expanded }"
+					:class="{ 'is-scrollable': isFullyExpanded && props.bodyScroll === 'auto' }"
 				>
 					<slot />
 				</div>
@@ -272,10 +405,11 @@ onBeforeUnmount(() => {
 
 <style scoped lang="scss">
 .draggable-bottom-sheet {
-	position: fixed;
+	position: absolute;
 	inset: 0;
-	display: block;
 	width: 100%;
+	height: 100%;
+	display: block;
 	max-width: 100%;
 	overflow: hidden;
 	pointer-events: auto;
@@ -283,6 +417,15 @@ onBeforeUnmount(() => {
 	&--peek-pass-through {
 		pointer-events: none;
 	}
+
+	&--persistent {
+		pointer-events: none;
+	}
+}
+
+.draggable-bottom-sheet--persistent .draggable-bottom-sheet__panel {
+	pointer-events: auto;
+	padding-bottom: 0;
 }
 
 .draggable-bottom-sheet__shade {
@@ -302,7 +445,7 @@ onBeforeUnmount(() => {
 }
 
 .draggable-bottom-sheet__panel {
-	position: fixed;
+	position: absolute;
 	left: 0;
 	right: 0;
 	bottom: 0;
@@ -312,9 +455,11 @@ onBeforeUnmount(() => {
 	overflow: hidden;
 	pointer-events: auto;
 	border-radius: 14px 14px 0 0;
-	padding-bottom: env(safe-area-inset-bottom, 0px);
 	transform: translate3d(0, 100%, 0);
-	transition: transform 0.28s cubic-bezier(0.32, 0.72, 0, 1);
+	transition:
+		transform 0.28s cubic-bezier(0.32, 0.72, 0, 1),
+		height 0.28s cubic-bezier(0.32, 0.72, 0, 1),
+		bottom 0.28s cubic-bezier(0.32, 0.72, 0, 1);
 	overscroll-behavior: contain;
 
 	&.is-dragging,
@@ -334,8 +479,27 @@ onBeforeUnmount(() => {
 	}
 
 	&--dark {
-		background: #1a1a1a;
+		background: var(--app-drawer-bg, rgba(25, 28, 33, 1));
 		color: #fff;
+	}
+
+	&.is-collapsed {
+		.draggable-bottom-sheet__header,
+		.draggable-bottom-sheet__body,
+		.draggable-bottom-sheet__footer {
+			visibility: hidden;
+			flex: 0 0 0;
+			height: 0;
+			min-height: 0;
+			overflow: hidden;
+			padding: 0;
+			margin: 0;
+			pointer-events: none;
+		}
+
+		.draggable-bottom-sheet__handle-wrap {
+			padding: 8px 0;
+		}
 	}
 }
 
@@ -378,24 +542,27 @@ onBeforeUnmount(() => {
 }
 
 .draggable-bottom-sheet__panel--dark .draggable-bottom-sheet__handle {
-	background: rgba(255, 255, 255, 0.22);
+	background: rgba(255, 255, 255, 0.63);
 }
 
 .draggable-bottom-sheet__header {
 	flex-shrink: 0;
-	touch-action: none;
+	touch-action: manipulation;
 }
 
 .draggable-bottom-sheet__body {
 	flex: 1;
 	min-height: 0;
 	min-width: 0;
+	display: flex;
+	flex-direction: column;
 	overflow-x: hidden;
 	overflow-y: hidden;
 	overscroll-behavior: contain;
 	-webkit-overflow-scrolling: touch;
 
 	&.is-scrollable {
+		display: block;
 		overflow-y: auto;
 		touch-action: pan-y;
 	}

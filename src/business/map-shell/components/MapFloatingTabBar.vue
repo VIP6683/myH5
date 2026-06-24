@@ -59,7 +59,14 @@ const activeTab = computed(() => {
 	}
 
 	const matched = [...route.matched].reverse().find((record) => record.meta?.tab);
-	return matched?.meta?.tab || 'area-monitor';
+	if (matched?.meta?.tab) {
+		return matched.meta.tab;
+	}
+
+	const monitorTab = props.tabs.find(
+		(tab) => tab.id === 'area-monitor' || tab.id === 'line-monitor'
+	);
+	return monitorTab?.id || props.tabs[0]?.id || 'stats';
 });
 
 function onTabClick(tab) {
@@ -118,22 +125,21 @@ function getTabIcon(icon, isActive) {
 
 <style scoped lang="scss">
 .map-floating-tab-bar-wrap {
-	position: absolute;
-	left: 0;
-	right: 0;
-	bottom: 0;
-	z-index: 1000;
+	flex-shrink: 0;
+	width: 100%;
+	z-index: 10;
 	opacity: 1;
 	transform: translate3d(0, 0, 0);
 	pointer-events: auto;
 	box-sizing: border-box;
-	background: var(--tabbar-bg, #000);
+	background: #141414;
 }
 
 .map-floating-tab-bar {
 	width: 100%;
-	background: var(--tabbar-bg, #000);
+	background: #141414;
 	border-top: 1px solid rgba(255, 255, 255, 0.06);
+	min-height: var(--app-tab-bar-height, calc(52px + env(safe-area-inset-bottom, 0px)));
 	padding-bottom: env(safe-area-inset-bottom, 0px);
 }
 

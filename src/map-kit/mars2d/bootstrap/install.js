@@ -14,29 +14,7 @@ L.Icon.Default.mergeOptions({
 	shadowUrl: markerShadow
 });
 
-function buildCompatEventType() {
-	const base = { ...mars2d.EventType };
-	return {
-		...base,
-		cameraChanged: base.move,
-		cameraMoveStart: base.movestart,
-		cameraMoveEnd: base.moveend,
-		wheel: base.zoom,
-		popupOpen: base.popupopen,
-		popupClose: base.popupclose
-	};
-}
-
-function buildCompatGraphic() {
-	return {
-		...mars2d.graphic,
-		BillboardEntity: mars2d.graphic.Marker,
-		PolygonEntity: mars2d.graphic.Polygon,
-		PolylineEntity: mars2d.graphic.Polyline
-	};
-}
-
-/** 挂载 Mars2D，并为仍引用 mars3d 名称的代码提供图形类兼容别名 */
+/** 挂载 Mars2D 与 Leaflet 到全局 */
 export function installMars2d() {
 	if (globalThis.mars2d) {
 		return globalThis.mars2d;
@@ -44,18 +22,5 @@ export function installMars2d() {
 
 	globalThis.L = L;
 	globalThis.mars2d = mars2d;
-	globalThis.mars3d = {
-		...mars2d,
-		graphic: buildCompatGraphic(),
-		layer: { ...mars2d.layer },
-		thing: mars2d.thing,
-		EventType: buildCompatEventType(),
-		Token: mars2d.Token,
-		PointTrans: mars2d.PointTrans,
-		MeasureUtil: mars2d.MeasureUtil,
-		Log: mars2d.Log,
-		Map: mars2d.Map
-	};
-
 	return mars2d;
 }

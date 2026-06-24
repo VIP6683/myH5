@@ -26,6 +26,13 @@ export function usesBackendLayers() {
 	return config.layerSource === 'backend';
 }
 
+/** 业务镶嵌图 WMTS 作为影像底图（不含高德） */
+export function usesMosaicBasemap() {
+	const config = getAppMapConfig();
+	const mosaic = config.mosaicMap || {};
+	return mosaic.enabled !== false && mosaic.replaceBasemap !== false;
+}
+
 function resolveTokenList(configKeys) {
 	if (Array.isArray(configKeys) && configKeys.length) {
 		return configKeys.filter(Boolean);
@@ -95,7 +102,7 @@ function buildOnlineOrXyzLayer(layerConfig) {
 	if (layer.url) {
 		// 兼容在线底图：给了 url 时，tdt/gaode 走 xyz 模板；其他类型（wms/wmts/xyz）保持原 type
 		layer.type = layer.type === 'gaode' || layer.type === 'tdt' ? 'xyz' : layer.type || 'xyz';
-		// WMS 用 layers 字段（Mars3D WmsLayer 选项），其余类型保持 layer 语义即可
+		// WMS 用 layers 字段，其余类型保持 layer 语义即可
 		if (layer.type === 'wms' && layer.layer) {
 			layer.layers = layer.layer;
 			delete layer.layer;
@@ -156,7 +163,7 @@ export function buildMapLayerOptions() {
 	const layers = [];
 	const backendOnly = usesBackendLayers();
 
-	if (!backendOnly && config.basemap && config.basemap.enabled !== false) {
+	if (!backendOnly && !usesMosaicBasemap() && config.basemap && config.basemap.enabled !== false) {
 		const basemapLayer = buildOnlineOrXyzLayer(config.basemap);
 		if (basemapLayer?.type === 'wms') {
 			layers.push({ ...basemapLayer, zIndex: basemapLayer.zIndex ?? 1, show: basemapLayer.show ?? true });

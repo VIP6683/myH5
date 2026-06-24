@@ -7,6 +7,12 @@ import { addPhotoWatermark } from '../utils/addPhotoWatermark.js';
 import { calcDistanceMeters, formatDistanceText } from '../utils/calcGeoDistance.js';
 import { reverseGeocode } from '../utils/tiandituGeocoder.js';
 import { getCurrentLocation } from '../../../utils/locationPermission.js';
+import {
+	parseAbnormalPhotoUrls,
+	saveAbnormalMonitorAdditionalInfo,
+	uploadAbnormalSurfacePhotoUrls
+} from '../../../api/statistics.js';
+import { getUserProfile } from '../../../utils/auth.js';
 
 const visible = defineModel('visible', { type: Boolean, default: false });
 
@@ -17,30 +23,68 @@ const props = defineProps({
 	}
 });
 
-const emit = defineEmits(['submit', 'close', 'back']);
+const emit = defineEmits(['submit', 'success', 'close', 'back']);
 
 const mapUiOverlay = inject(MAP_UI_OVERLAY_KEY, null);
 
 const navSheetVisible = ref(false);
-const photoInputRef = ref(null);
-const photoProcessing = ref(false);
-const photoPreviewUrl = ref('');
+const verifyPhotoInputRef = ref(null);
+const verifyPhotoProcessing = ref(false);
+const verifyPhotos = ref([]);
+const verifyPhotoTip = ref('');
+
+const disposePhotoInputRef = ref(null);
+const disposePhotoProcessing = ref(false);
+const disposePhotos = ref([]);
+const disposePhotoTip = ref('');
+
+const photoPreviewIndex = ref(-1);
 const photoPreviewOpen = ref(false);
+const photoPreviewGroup = ref('verify'); // 'verify' | 'dispose'
+const submitting = ref(false);
+const submitTip = ref('');
 
 const createDefaultForm = () => ({
 	includeInLedger: true,
 	isVerified: true,
 	opinion: '',
-	remarks: '',
-	photoName: '',
-	photoFile: null
+	remarks: ''
 });
 
 const form = reactive(createDefaultForm());
 
-const inspectorName = 'M.佑先生';
+const additionalInfo = computed(() => props.detail?.additionalInfo);
+
+const isCheckReadonly = computed(() => Number(additionalInfo.value?.checkStatus) === 1);
+
+const isDisposeReadonly = computed(() => Number(additionalInfo.value?.disposalStatus) === 1);
+
+const showDisposeSection = computed(() => isCheckReadonly.value || form.isVerified);
+
+const canSubmit = computed(() => !isCheckReadonly.value || !isDisposeReadonly.value);
+
+const sheetTitle = computed(() => (isCheckReadonly.value ? '核查信息（已核查）' : '核查信息'));
+
+const submitButtonLabel = computed(() => {
+	if (submitting.value) {
+		return '提交中...';
+	}
+	if (isCheckReadonly.value) {
+		return '提交处置';
+	}
+	return '提交';
+});
+
+const inspectorName = computed(
+	() => props.detail?.additionalInfo?.checkUserName || getUserProfile().username || '—'
+);
 
 const verifyTime = computed(() => {
+	const checkTime = props.detail?.additionalInfo?.checkTime;
+	if (checkTime) {
+		return String(checkTime);
+	}
+
 	const now = new Date();
 	const year = now.getFullYear();
 	const month = String(now.getMonth() + 1).padStart(2, '0');
@@ -55,30 +99,52 @@ const infoRows = computed(() => {
 	}
 
 	const coordinates = detail.coordinates;
+	const lng = coordinates?.lng ?? detail.lng;
+	const lat = coordinates?.lat ?? detail.lat;
 	const coordinateText =
-		coordinates?.lng !== undefined && coordinates?.lat !== undefined
-			? `${coordinates.lng}, ${coordinates.lat}`
+		lng !== undefined &&
+		lng !== null &&
+		lng !== '' &&
+		lat !== undefined &&
+		lat !== null &&
+		lat !== ''
+			? `${lng}, ${lat}`
 			: '';
 
 	return [
 		{ label: '图斑编号', value: detail.patchNo || detail.objectNo },
+		...(detail.kind === 'line' ? [{ label: '线路名称', value: detail.lineName }] : []),
 		{ label: '所属变电站', value: detail.substationName },
-		{ label: '核查人', value: inspectorName },
+		{ label: '核查人', value: inspectorName.value },
 		{ label: '核查时间', value: verifyTime.value },
 		{ label: '坐标', value: coordinateText }
 	].filter((row) => row.value);
 });
 
 const navPoi = computed(() => {
-	const coordinates = props.detail?.coordinates;
-	if (!coordinates) {
+	const detail = props.detail;
+	if (!detail) {
+		return null;
+	}
+
+	const coordinates = detail.coordinates;
+	const lng = coordinates?.lng ?? detail.lng;
+	const lat = coordinates?.lat ?? detail.lat;
+	if (
+		lng === undefined ||
+		lng === null ||
+		lng === '' ||
+		lat === undefined ||
+		lat === null ||
+		lat === ''
+	) {
 		return null;
 	}
 
 	return {
-		lng: coordinates.lng,
-		lat: coordinates.lat,
-		name: props.detail?.substationName || '核查位置'
+		lng: Number(lng),
+		lat: Number(lat),
+		name: detail.substationName || detail.objectNo || '核查位置'
 	};
 });
 
@@ -91,42 +157,128 @@ const onBack = () => {
 	close();
 };
 
-const revokePhotoPreview = () => {
-	if (photoPreviewUrl.value) {
-		URL.revokeObjectURL(photoPreviewUrl.value);
-		photoPreviewUrl.value = '';
+const revokePhotoItem = (item) => {
+	if (item?.file && item?.previewUrl?.startsWith('blob:')) {
+		URL.revokeObjectURL(item.previewUrl);
 	}
-	photoPreviewOpen.value = false;
 };
 
-const setPhotoPreview = (file) => {
-	revokePhotoPreview();
-	if (file) {
-		photoPreviewUrl.value = URL.createObjectURL(file);
+const revokeAllPhotos = () => {
+	verifyPhotos.value.forEach(revokePhotoItem);
+	verifyPhotos.value = [];
+	disposePhotos.value.forEach(revokePhotoItem);
+	disposePhotos.value = [];
+	photoPreviewIndex.value = -1;
+	photoPreviewOpen.value = false;
+	verifyPhotoTip.value = '';
+	disposePhotoTip.value = '';
+};
+
+const createPhotoItem = (file) => ({
+	id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+	file,
+	name: file.name,
+	previewUrl: URL.createObjectURL(file)
+});
+
+const createRemotePhotoItem = (url, index) => ({
+	id: `remote-${index}-${url}`,
+	url,
+	name: `核查照片 ${index + 1}`,
+	previewUrl: url
+});
+
+const populateFormFromAdditionalInfo = () => {
+	const info = props.detail?.additionalInfo;
+	if (!info) {
+		return;
 	}
+
+	if (info.isAccounted !== undefined && info.isAccounted !== null) {
+		form.includeInLedger = Number(info.isAccounted) === 1;
+	}
+	form.opinion = info.checkOpinion || '';
+	form.remarks = info.checkRemark || '';
+
+	const checkPhotos = parseAbnormalPhotoUrls(info.checkPhotos);
+	verifyPhotos.value = checkPhotos.map((url, index) => createRemotePhotoItem(url, index));
+
+	const disposalPhotos = parseAbnormalPhotoUrls(info.disposalPhotos);
+	disposePhotos.value = disposalPhotos.map((url, index) => ({
+		...createRemotePhotoItem(url, index),
+		name: `处置照片 ${index + 1}`
+	}));
+};
+
+const resolvePhotoUrls = async (photos, uploadQuery) => {
+	const urls = new Array(photos.length);
+	const filesToUpload = [];
+	const fileIndexes = [];
+
+	photos.forEach((item, index) => {
+		if (item.file) {
+			filesToUpload.push(item.file);
+			fileIndexes.push(index);
+			return;
+		}
+
+		if (item.url) {
+			urls[index] = item.url;
+		}
+	});
+
+	if (filesToUpload.length) {
+		const uploaded = await uploadAbnormalSurfacePhotoUrls(filesToUpload, uploadQuery);
+		fileIndexes.forEach((index, uploadIndex) => {
+			urls[index] = uploaded[uploadIndex];
+		});
+	}
+
+	return urls.filter(Boolean);
 };
 
 const resetForm = () => {
+	submitTip.value = '';
+
+	if (isCheckReadonly.value) {
+		disposePhotos.value.forEach(revokePhotoItem);
+		disposePhotos.value = [];
+		disposePhotoTip.value = '';
+		if (disposePhotoInputRef.value) {
+			disposePhotoInputRef.value.value = '';
+		}
+
+		const disposalPhotos = parseAbnormalPhotoUrls(additionalInfo.value?.disposalPhotos);
+		disposePhotos.value = disposalPhotos.map((url, index) => ({
+			...createRemotePhotoItem(url, index),
+			name: `处置照片 ${index + 1}`
+		}));
+		return;
+	}
+
 	Object.assign(form, createDefaultForm());
-	revokePhotoPreview();
-	if (photoInputRef.value) {
-		photoInputRef.value.value = '';
+	revokeAllPhotos();
+	if (verifyPhotoInputRef.value) {
+		verifyPhotoInputRef.value.value = '';
+	}
+	if (disposePhotoInputRef.value) {
+		disposePhotoInputRef.value.value = '';
 	}
 };
 
 const getWatermarkOptions = async () => {
 	const patchNo = props.detail?.patchNo || props.detail?.objectNo || '未知';
-	let lng = '';
-	let lat = '';
+	const patchCoords = props.detail?.coordinates;
+	let lng = patchCoords?.lng ?? '';
+	let lat = patchCoords?.lat ?? '';
 	let address = '';
-	let distance = '未知';
+	let distance = patchCoords?.lng != null && patchCoords?.lat != null ? '0m（图斑中心）' : '未知';
 
 	try {
 		const current = await getCurrentLocation();
 		lng = Number(current.lng.toFixed(6));
 		lat = Number(current.lat.toFixed(6));
 
-		const patchCoords = props.detail?.coordinates;
 		if (patchCoords?.lng != null && patchCoords?.lat != null) {
 			distance = formatDistanceText(
 				calcDistanceMeters(
@@ -135,19 +287,21 @@ const getWatermarkOptions = async () => {
 				)
 			);
 		}
-
-		try {
-			address = await reverseGeocode(current.lng, current.lat);
-		} catch (error) {
-			console.warn('[MapVerify] reverse geocode failed', error);
-		}
 	} catch (error) {
 		console.warn('[MapVerify] get current location failed', error);
 	}
 
+	if (lng !== '' && lat !== '') {
+		try {
+			address = await reverseGeocode(Number(lng), Number(lat));
+		} catch (error) {
+			console.warn('[MapVerify] reverse geocode failed', error);
+		}
+	}
+
 	return {
 		patchNo,
-		inspector: inspectorName,
+		inspector: inspectorName.value,
 		shotTime: new Date(),
 		distance,
 		lng,
@@ -156,39 +310,87 @@ const getWatermarkOptions = async () => {
 	};
 };
 
-const onPhotoChange = async (event) => {
-	const file = event.target.files?.[0];
-	if (!file) {
-		form.photoName = '';
-		form.photoFile = null;
-		revokePhotoPreview();
+const onVerifyPhotoChange = async (event) => {
+	const files = Array.from(event.target.files || []);
+	if (!files.length) {
 		return;
 	}
 
-	photoProcessing.value = true;
+	verifyPhotoProcessing.value = true;
 	try {
-		const watermarkedFile = await addPhotoWatermark(file, await getWatermarkOptions());
-		form.photoFile = watermarkedFile;
-		form.photoName = watermarkedFile.name;
-		setPhotoPreview(watermarkedFile);
+		for (const file of files) {
+			const watermarkedFile = await addPhotoWatermark(file, await getWatermarkOptions());
+			verifyPhotos.value.push(createPhotoItem(watermarkedFile));
+		}
+		verifyPhotoTip.value = '';
 	} catch (error) {
 		console.error('[MapVerify] photo watermark failed', error);
-		form.photoName = '';
-		form.photoFile = null;
-		revokePhotoPreview();
-		if (photoInputRef.value) {
-			photoInputRef.value.value = '';
-		}
 	} finally {
-		photoProcessing.value = false;
+		if (verifyPhotoInputRef.value) {
+			verifyPhotoInputRef.value.value = '';
+		}
+		verifyPhotoProcessing.value = false;
 	}
 };
 
-const openPhotoPreview = () => {
-	if (photoPreviewUrl.value) {
+const onDisposePhotoChange = async (event) => {
+	const files = Array.from(event.target.files || []);
+	if (!files.length) {
+		return;
+	}
+
+	disposePhotoProcessing.value = true;
+	try {
+		for (const file of files) {
+			const watermarkedFile = await addPhotoWatermark(file, await getWatermarkOptions());
+			disposePhotos.value.push(createPhotoItem(watermarkedFile));
+		}
+		disposePhotoTip.value = '';
+	} catch (error) {
+		console.error('[MapVerify] photo watermark failed', error);
+	} finally {
+		if (disposePhotoInputRef.value) {
+			disposePhotoInputRef.value.value = '';
+		}
+		disposePhotoProcessing.value = false;
+	}
+};
+
+const removePhoto = (group, photoId) => {
+	const listRef = group === 'dispose' ? disposePhotos : verifyPhotos;
+	const index = listRef.value.findIndex((item) => item.id === photoId);
+	if (index < 0) {
+		return;
+	}
+
+	revokePhotoItem(listRef.value[index]);
+	listRef.value.splice(index, 1);
+
+	if (
+		photoPreviewOpen.value &&
+		photoPreviewGroup.value === group &&
+		photoPreviewIndex.value === index
+	) {
+		photoPreviewOpen.value = false;
+		photoPreviewIndex.value = -1;
+	} else if (photoPreviewIndex.value > index) {
+		photoPreviewIndex.value -= 1;
+	}
+};
+
+const openPhotoPreview = (group, index) => {
+	const listRef = group === 'dispose' ? disposePhotos : verifyPhotos;
+	if (listRef.value[index]) {
+		photoPreviewGroup.value = group;
+		photoPreviewIndex.value = index;
 		photoPreviewOpen.value = true;
 	}
 };
+
+const photoPreviewUrl = computed(() => {
+	const list = photoPreviewGroup.value === 'dispose' ? disposePhotos.value : verifyPhotos.value;
+	return list[photoPreviewIndex.value]?.previewUrl || '';
+});
 
 const closePhotoPreview = () => {
 	photoPreviewOpen.value = false;
@@ -201,12 +403,116 @@ const openNavigation = () => {
 	navSheetVisible.value = true;
 };
 
-const onSubmit = () => {
-	emit('submit', {
-		...form,
-		detail: props.detail
-	});
-	close();
+const onSubmit = async () => {
+	if (submitting.value || !canSubmit.value) {
+		return;
+	}
+
+	submitTip.value = '';
+	verifyPhotoTip.value = '';
+	disposePhotoTip.value = '';
+
+	const surfaceId = props.detail?.id;
+	if (surfaceId === undefined || surfaceId === null || surfaceId === '') {
+		submitTip.value = '缺少图斑信息，无法提交';
+		return;
+	}
+
+	const additionalInfoId = props.detail?.additionalInfoId;
+	if (additionalInfoId === undefined || additionalInfoId === null || additionalInfoId === '') {
+		submitTip.value = '缺少附加信息，无法提交';
+		return;
+	}
+
+	const uploadQuery = { id: surfaceId };
+	const info = additionalInfo.value;
+
+	if (isCheckReadonly.value) {
+		if (!disposePhotos.value.length) {
+			disposePhotoTip.value = '请至少拍摄一张处置照片';
+			return;
+		}
+	} else {
+		if (!verifyPhotos.value.length) {
+			verifyPhotoTip.value = '请至少拍摄一张核查照片';
+			return;
+		}
+
+		if (form.isVerified && !disposePhotos.value.length) {
+			disposePhotoTip.value = '请至少拍摄一张处置照片';
+			return;
+		}
+	}
+
+	submitting.value = true;
+	try {
+		let payload;
+		let checkPhotoUrls = [];
+		let disposalPhotoUrls = [];
+
+		if (isCheckReadonly.value) {
+			disposalPhotoUrls = await resolvePhotoUrls(disposePhotos.value, uploadQuery);
+			payload = {
+				id: additionalInfoId,
+				isAccounted: info?.isAccounted ?? 0,
+				checkStatus: 1,
+				checkType: info?.checkType ?? 0,
+				disposalStatus: 1,
+				checkOpinion: info?.checkOpinion || '',
+				checkRemark: info?.checkRemark || '',
+				checkPhotos: info?.checkPhotos || JSON.stringify([]),
+				disposalPhotos: JSON.stringify(disposalPhotoUrls)
+			};
+		} else {
+			checkPhotoUrls = await resolvePhotoUrls(verifyPhotos.value, uploadQuery);
+			disposalPhotoUrls = form.isVerified
+				? await resolvePhotoUrls(disposePhotos.value, uploadQuery)
+				: [];
+
+			payload = {
+				id: additionalInfoId,
+				isAccounted: form.includeInLedger ? 1 : 0,
+				checkStatus: 1,
+				checkType: 0,
+				disposalStatus: form.isVerified ? 1 : 0,
+				checkOpinion: form.opinion?.trim() || '',
+				checkRemark: form.remarks?.trim() || '',
+				checkPhotos: JSON.stringify(checkPhotoUrls),
+				...(form.isVerified ? { disposalPhotos: JSON.stringify(disposalPhotoUrls) } : {})
+			};
+		}
+
+		await saveAbnormalMonitorAdditionalInfo(payload);
+
+		const verifyPhotoFiles = verifyPhotos.value.map((item) => item.file).filter(Boolean);
+		const disposePhotoFiles = disposePhotos.value.map((item) => item.file).filter(Boolean);
+
+		const submitPayload = {
+			...form,
+			verifyPhotoFiles,
+			verifyPhotoNames: verifyPhotos.value.map((item) => item.name),
+			disposePhotoFiles,
+			disposePhotoNames: disposePhotos.value.map((item) => item.name),
+			checkPhotoUrls,
+			disposalPhotoUrls,
+			detail: props.detail
+		};
+
+		const successMessage = isCheckReadonly.value
+			? '处置信息提交成功'
+			: form.isVerified
+				? '核查处置信息提交成功'
+				: '核查信息提交成功';
+
+		emit('submit', submitPayload);
+		emit('success', { ...submitPayload, successMessage });
+		close();
+	} catch (error) {
+		console.error('[MapVerify] submit failed', error);
+		submitTip.value = error?.message || '提交失败，请稍后重试';
+	} finally {
+		submitting.value = false;
+	}
 };
 
 const onSheetAfterClose = () => {
@@ -217,12 +523,22 @@ const onSheetAfterClose = () => {
 watch(visible, (open) => {
 	if (open) {
 		resetForm();
+		populateFormFromAdditionalInfo();
 		mapUiOverlay?.enterOverlay();
 	}
 });
 
+watch(
+	() => form.isVerified,
+	(isVerified) => {
+		if (!isVerified) {
+			disposePhotoTip.value = '';
+		}
+	}
+);
+
 onBeforeUnmount(() => {
-	revokePhotoPreview();
+	revokeAllPhotos();
 	if (visible.value) {
 		mapUiOverlay?.exitOverlay();
 	}
@@ -235,6 +551,8 @@ onBeforeUnmount(() => {
 		aria-label="核查信息"
 		theme="dark"
 		panel-class="map-verify-form-sheet__panel"
+		drag-surface="panel"
+		body-scroll="inner"
 		peek-height="38vh"
 		@after-close="onSheetAfterClose"
 	>
@@ -257,7 +575,7 @@ onBeforeUnmount(() => {
 							/>
 						</svg>
 					</button>
-					<h2 class="map-verify-form-sheet__title">核查信息</h2>
+					<h2 class="map-verify-form-sheet__title">{{ sheetTitle }}</h2>
 				</div>
 				<button
 					type="button"
@@ -271,136 +589,247 @@ onBeforeUnmount(() => {
 		</template>
 
 		<div class="map-verify-form-sheet__body">
-			<section class="map-verify-form-sheet__info-card">
-				<dl class="map-verify-form-sheet__info-list">
-					<div
-						v-for="row in infoRows"
-						:key="row.label"
-						class="map-verify-form-sheet__info-row"
-					>
-						<dt class="map-verify-form-sheet__info-label">{{ row.label }}</dt>
-						<dd class="map-verify-form-sheet__info-value">{{ row.value }}</dd>
-					</div>
-				</dl>
-			</section>
+			<div class="map-verify-form-sheet__scroll" data-bottom-sheet-scroll>
+			<section class="map-verify-form-sheet__verify-card">
+				<section class="map-verify-form-sheet__info-card">
+					<dl class="map-verify-form-sheet__info-list">
+						<div
+							v-for="row in infoRows"
+							:key="row.label"
+							class="map-verify-form-sheet__info-row"
+						>
+							<dt class="map-verify-form-sheet__info-label">{{ row.label }}</dt>
+							<dd class="map-verify-form-sheet__info-value">{{ row.value }}</dd>
+						</div>
+					</dl>
+				</section>
 
-			<section class="map-verify-form-sheet__form">
-				<div class="map-verify-form-sheet__field">
-					<label class="map-verify-form-sheet__field-label">
-						<span class="map-verify-form-sheet__required">*</span>
-						是否纳入台账
-					</label>
-					<button
-						type="button"
-						class="map-verify-form-sheet__switch"
-						:class="{ 'is-on': form.includeInLedger }"
-						role="switch"
-						:aria-checked="form.includeInLedger"
-						@click="form.includeInLedger = !form.includeInLedger"
-					>
-						<span class="map-verify-form-sheet__switch-thumb" />
-					</button>
-				</div>
-
-				<div class="map-verify-form-sheet__field">
-					<label class="map-verify-form-sheet__field-label">
-						<span class="map-verify-form-sheet__required">*</span>
-						是否处置
-					</label>
-					<button
-						type="button"
-						class="map-verify-form-sheet__switch"
-						:class="{ 'is-on': form.isVerified }"
-						role="switch"
-						:aria-checked="form.isVerified"
-						@click="form.isVerified = !form.isVerified"
-					>
-						<span class="map-verify-form-sheet__switch-thumb" />
-					</button>
-				</div>
-
-				<div class="map-verify-form-sheet__field map-verify-form-sheet__field--photo">
-					<div class="map-verify-form-sheet__photo-row">
+				<div class="map-verify-form-sheet__form" :class="{ 'is-readonly': isCheckReadonly }">
+					<div class="map-verify-form-sheet__field">
 						<label class="map-verify-form-sheet__field-label">
 							<span class="map-verify-form-sheet__required">*</span>
-							核查拍照
+							是否纳入台账
 						</label>
-						<label
-							class="map-verify-form-sheet__photo-btn"
-							:class="{ 'is-disabled': photoProcessing }"
+						<button
+							type="button"
+							class="map-verify-form-sheet__switch"
+							:class="{ 'is-on': form.includeInLedger }"
+							role="switch"
+							:aria-checked="form.includeInLedger"
+							:disabled="isCheckReadonly"
+							@click="form.includeInLedger = !form.includeInLedger"
 						>
-							<input
-								ref="photoInputRef"
-								class="map-verify-form-sheet__photo-input"
-								type="file"
-								accept="image/*"
-								capture="environment"
-								:disabled="photoProcessing"
-								@change="onPhotoChange"
-							/>
-							{{
-								photoProcessing
-									? '水印处理中...'
-									: form.photoFile
-										? '重拍'
-										: '去拍照'
-							}}
-						</label>
+							<span class="map-verify-form-sheet__switch-thumb" />
+						</button>
 					</div>
-					<button
-						v-if="photoPreviewUrl"
-						type="button"
-						class="map-verify-form-sheet__photo-preview"
-						aria-label="预览核查照片"
-						@click="openPhotoPreview"
-					>
-						<img
-							class="map-verify-form-sheet__photo-preview-img"
-							:src="photoPreviewUrl"
-							alt="核查照片预览"
+
+					<div v-if="!isCheckReadonly" class="map-verify-form-sheet__field">
+						<label class="map-verify-form-sheet__field-label">
+							<span class="map-verify-form-sheet__required">*</span>
+							是否处置
+						</label>
+						<button
+							type="button"
+							class="map-verify-form-sheet__switch"
+							:class="{ 'is-on': form.isVerified }"
+							role="switch"
+							:aria-checked="form.isVerified"
+							@click="form.isVerified = !form.isVerified"
+						>
+							<span class="map-verify-form-sheet__switch-thumb" />
+						</button>
+					</div>
+
+					<div class="map-verify-form-sheet__field map-verify-form-sheet__field--photo">
+						<div class="map-verify-form-sheet__photo-row">
+							<label class="map-verify-form-sheet__field-label">
+								<span class="map-verify-form-sheet__required">*</span>
+								核查拍照
+							</label>
+							<label
+								v-if="!isCheckReadonly"
+								class="map-verify-form-sheet__photo-btn"
+								:class="{ 'is-disabled': verifyPhotoProcessing }"
+							>
+								<input
+									ref="verifyPhotoInputRef"
+									class="map-verify-form-sheet__photo-input"
+									type="file"
+									accept="image/*"
+									capture="environment"
+									multiple
+									:disabled="verifyPhotoProcessing"
+									@change="onVerifyPhotoChange"
+								/>
+								{{
+									verifyPhotoProcessing
+										? '水印处理中...'
+										: verifyPhotos.length
+											? '继续拍照'
+											: '去拍照'
+								}}
+							</label>
+						</div>
+						<p v-if="verifyPhotoTip" class="map-verify-form-sheet__photo-tip">
+							{{ verifyPhotoTip }}
+						</p>
+						<div v-if="verifyPhotos.length" class="map-verify-form-sheet__photo-grid">
+							<div
+								v-for="(photo, index) in verifyPhotos"
+								:key="photo.id"
+								class="map-verify-form-sheet__photo-item"
+							>
+								<button
+									type="button"
+									class="map-verify-form-sheet__photo-preview"
+									:aria-label="`预览核查照片 ${index + 1}`"
+									@click="openPhotoPreview('verify', index)"
+								>
+									<img
+										class="map-verify-form-sheet__photo-preview-img"
+										:src="photo.previewUrl"
+										:alt="`核查照片 ${index + 1}`"
+									/>
+								</button>
+								<button
+									v-if="!isCheckReadonly"
+									type="button"
+									class="map-verify-form-sheet__photo-remove"
+									aria-label="删除照片"
+									@click.stop="removePhoto('verify', photo.id)"
+								>
+									×
+								</button>
+							</div>
+						</div>
+					</div>
+
+					<div class="map-verify-form-sheet__field map-verify-form-sheet__field--input">
+						<label class="map-verify-form-sheet__field-label">核查意见</label>
+						<input
+							v-model="form.opinion"
+							class="map-verify-form-sheet__input"
+							type="text"
+							placeholder="请输入"
+							:readonly="isCheckReadonly"
 						/>
-						<span class="map-verify-form-sheet__photo-preview-hint">点击预览</span>
-					</button>
-				</div>
+					</div>
 
-				<div class="map-verify-form-sheet__field map-verify-form-sheet__field--input">
-					<label class="map-verify-form-sheet__field-label">核查意见</label>
-					<input
-						v-model="form.opinion"
-						class="map-verify-form-sheet__input"
-						type="text"
-						placeholder="请输入"
-					/>
-				</div>
-
-				<div class="map-verify-form-sheet__field map-verify-form-sheet__field--input">
-					<label class="map-verify-form-sheet__field-label">备注</label>
-					<input
-						v-model="form.remarks"
-						class="map-verify-form-sheet__input"
-						type="text"
-						placeholder="请输入"
-					/>
+					<div class="map-verify-form-sheet__field map-verify-form-sheet__field--input">
+						<label class="map-verify-form-sheet__field-label">备注</label>
+						<input
+							v-model="form.remarks"
+							class="map-verify-form-sheet__input"
+							type="text"
+							placeholder="请输入"
+							:readonly="isCheckReadonly"
+						/>
+					</div>
 				</div>
 			</section>
+
+			<div
+				v-if="showDisposeSection"
+				class="map-verify-form-sheet__section-title map-verify-form-sheet__section-title--accent map-verify-form-sheet__section-title--spaced"
+			>
+				处置信息
+				<span v-if="isDisposeReadonly" class="map-verify-form-sheet__status-badge">已处置</span>
+			</div>
+			<section
+				v-if="showDisposeSection"
+				class="map-verify-form-sheet__dispose-card"
+				:class="{ 'is-readonly': isDisposeReadonly }"
+			>
+				<!-- <div class="map-verify-form-sheet__field">
+					<label class="map-verify-form-sheet__field-label">处置状态</label>
+					<span class="map-verify-form-sheet__status-text">待处置</span>
+				</div> -->
+				<div class="map-verify-form-sheet__field">
+					<label class="map-verify-form-sheet__field-label">
+						<span class="map-verify-form-sheet__required">*</span>
+						处置拍照
+					</label>
+					<label
+						v-if="!isDisposeReadonly"
+						class="map-verify-form-sheet__photo-btn"
+						:class="{ 'is-disabled': disposePhotoProcessing }"
+					>
+						<input
+							ref="disposePhotoInputRef"
+							class="map-verify-form-sheet__photo-input"
+							type="file"
+							accept="image/*"
+							capture="environment"
+							multiple
+							:disabled="disposePhotoProcessing"
+							@change="onDisposePhotoChange"
+						/>
+						{{
+							disposePhotoProcessing
+								? '水印处理中...'
+								: disposePhotos.length
+									? '继续拍照'
+									: '去拍照'
+						}}
+					</label>
+				</div>
+				<p v-if="disposePhotoTip" class="map-verify-form-sheet__photo-tip">
+					{{ disposePhotoTip }}
+				</p>
+				<div v-if="disposePhotos.length" class="map-verify-form-sheet__photo-grid">
+					<div
+						v-for="(photo, index) in disposePhotos"
+						:key="photo.id"
+						class="map-verify-form-sheet__photo-item"
+					>
+						<button
+							type="button"
+							class="map-verify-form-sheet__photo-preview"
+							:aria-label="`预览处置照片 ${index + 1}`"
+							@click="openPhotoPreview('dispose', index)"
+						>
+							<img
+								class="map-verify-form-sheet__photo-preview-img"
+								:src="photo.previewUrl"
+								:alt="`处置照片 ${index + 1}`"
+							/>
+						</button>
+						<button
+							v-if="!isDisposeReadonly"
+							type="button"
+							class="map-verify-form-sheet__photo-remove"
+							aria-label="删除照片"
+							@click.stop="removePhoto('dispose', photo.id)"
+						>
+							×
+						</button>
+					</div>
+				</div>
+			</section>
+			</div>
 		</div>
 
 		<template #footer>
-			<footer class="map-verify-form-sheet__footer">
-				<button
-					type="button"
-					class="map-verify-form-sheet__btn map-verify-form-sheet__btn--ghost"
-					@click="resetForm"
-				>
-					重置
-				</button>
-				<button
-					type="button"
-					class="map-verify-form-sheet__btn map-verify-form-sheet__btn--primary"
-					@click="onSubmit"
-				>
-					提交
-				</button>
+			<footer v-if="canSubmit" class="map-verify-form-sheet__footer">
+				<p v-if="submitTip" class="map-verify-form-sheet__submit-tip">{{ submitTip }}</p>
+				<div class="map-verify-form-sheet__footer-actions">
+					<button
+						type="button"
+						class="map-verify-form-sheet__btn map-verify-form-sheet__btn--ghost"
+						:disabled="submitting"
+						@click="resetForm"
+					>
+						重置
+					</button>
+					<button
+						type="button"
+						class="map-verify-form-sheet__btn map-verify-form-sheet__btn--primary"
+						:disabled="submitting"
+						@click="onSubmit"
+					>
+						{{ submitButtonLabel }}
+					</button>
+				</div>
 			</footer>
 		</template>
 	</DraggableBottomSheet>
@@ -480,8 +909,8 @@ onBeforeUnmount(() => {
 .map-verify-form-sheet__title {
 	margin: 0;
 	font-size: 14px;
-	font-weight: 500;
-	color: var(--app-accent, #1cded4);
+	font-weight: 700;
+	color: #1cded4;
 	line-height: 1.3;
 }
 
@@ -489,9 +918,9 @@ onBeforeUnmount(() => {
 	padding: 0;
 	border: 0;
 	background: transparent;
-	color: var(--app-accent, #1cded4);
+	color: #1cded4;
 	font-size: 14px;
-	font-weight: 500;
+	font-weight: 700;
 	line-height: 1.3;
 	cursor: pointer;
 	-webkit-tap-highlight-color: transparent;
@@ -507,15 +936,45 @@ onBeforeUnmount(() => {
 }
 
 .map-verify-form-sheet__body {
+	flex: 1;
+	min-height: 0;
+	display: flex;
+	flex-direction: column;
+	box-sizing: border-box;
+}
+
+.map-verify-form-sheet__scroll {
+	flex: 1;
+	min-height: 0;
 	padding: 0 14px;
 	box-sizing: border-box;
+	overflow-x: hidden;
+	overflow-y: auto;
+	-webkit-overflow-scrolling: touch;
+	overscroll-behavior: contain;
+	touch-action: pan-y;
 }
 
 .map-verify-form-sheet__info-card {
 	margin-bottom: 4px;
-	padding: 8px 12px;
+	padding: 0;
+	border-radius: 0;
+	background: transparent;
+}
+
+.map-verify-form-sheet__dispose-card {
+	margin-bottom: 4px;
+	padding: 8px 12px 4px;
 	border-radius: 8px;
-	background: rgba(255, 255, 255, 0.04);
+	background: var(--app-drawer-surface, #25282c);
+}
+
+.map-verify-form-sheet__verify-card {
+	margin-top: 8px;
+	margin-bottom: 4px;
+	padding: 8px 12px 4px;
+	border-radius: 8px;
+	background: var(--app-drawer-surface, #25282c);
 }
 
 .map-verify-form-sheet__info-list {
@@ -558,6 +1017,26 @@ onBeforeUnmount(() => {
 	padding-bottom: 4px;
 }
 
+.map-verify-form-sheet__section-title {
+	padding: 9px 0 4px;
+	font-size: 13px;
+	font-weight: 500;
+	line-height: 1.3;
+	color: rgba(255, 255, 255, 0.9);
+}
+
+.map-verify-form-sheet__section-title--accent {
+	color: #1cded4;
+	font-weight: 700;
+	font-size: 14px;
+}
+
+.map-verify-form-sheet__section-title--spaced {
+	margin-top: 10px;
+	margin-bottom: 2px;
+	padding-left: 2px;
+}
+
 .map-verify-form-sheet__field {
 	display: flex;
 	align-items: center;
@@ -586,12 +1065,17 @@ onBeforeUnmount(() => {
 	gap: 2px;
 	min-width: 0;
 	flex: 1;
+	position: relative;
+	padding-left: 10px;
 	font-size: 13px;
 	color: rgba(255, 255, 255, 0.82);
 	line-height: 1.3;
 }
 
 .map-verify-form-sheet__required {
+	position: absolute;
+	left: 0;
+	top: 0;
 	color: #ff4d4f;
 	font-size: 13px;
 	line-height: 1;
@@ -609,6 +1093,12 @@ onBeforeUnmount(() => {
 	cursor: pointer;
 	transition: background 0.2s ease;
 	-webkit-tap-highlight-color: transparent;
+
+	&:disabled {
+		opacity: 0.72;
+		cursor: default;
+		pointer-events: none;
+	}
 
 	&.is-on {
 		background: #22c55e;
@@ -636,6 +1126,24 @@ onBeforeUnmount(() => {
 	align-items: center;
 	justify-content: space-between;
 	gap: 12px;
+	min-width: 0;
+}
+
+.map-verify-form-sheet__photo-grid {
+	display: grid;
+	grid-template-columns: repeat(3, minmax(0, 1fr));
+	gap: 8px;
+}
+
+.map-verify-form-sheet__photo-tip {
+	margin: 0;
+	font-size: 12px;
+	line-height: 1.4;
+	color: #ff7875;
+}
+
+.map-verify-form-sheet__photo-item {
+	position: relative;
 	min-width: 0;
 }
 
@@ -675,11 +1183,12 @@ onBeforeUnmount(() => {
 	position: relative;
 	display: block;
 	width: 100%;
+	aspect-ratio: 1;
 	padding: 0;
 	border: 0;
 	border-radius: 8px;
 	overflow: hidden;
-	background: rgba(255, 255, 255, 0.04);
+	background: var(--app-drawer-surface, #25282c);
 	cursor: pointer;
 	-webkit-tap-highlight-color: transparent;
 
@@ -688,23 +1197,45 @@ onBeforeUnmount(() => {
 	}
 }
 
+.map-verify-form-sheet__status-text {
+	font-size: 13px;
+	color: #f59e0b;
+}
+
+.map-verify-form-sheet__photo-btn--secondary {
+	background: var(--app-accent, #1cded4);
+}
+
 .map-verify-form-sheet__photo-preview-img {
 	display: block;
 	width: 100%;
-	max-height: 120px;
+	height: 100%;
 	object-fit: cover;
 }
 
-.map-verify-form-sheet__photo-preview-hint {
+.map-verify-form-sheet__photo-remove {
 	position: absolute;
-	right: 8px;
-	bottom: 8px;
-	padding: 3px 8px;
-	border-radius: 999px;
-	background: rgba(0, 0, 0, 0.55);
+	top: 4px;
+	right: 4px;
+	z-index: 1;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	width: 20px;
+	height: 20px;
+	padding: 0;
+	border: 0;
+	border-radius: 50%;
+	background: rgba(0, 0, 0, 0.62);
 	color: #fff;
-	font-size: 12px;
-	line-height: 1.4;
+	font-size: 14px;
+	line-height: 1;
+	cursor: pointer;
+	-webkit-tap-highlight-color: transparent;
+
+	&:active {
+		opacity: 0.85;
+	}
 }
 
 .map-verify-photo-viewer {
@@ -754,7 +1285,7 @@ onBeforeUnmount(() => {
 	padding: 7px 10px;
 	border: 0;
 	border-radius: 6px;
-	background: rgba(255, 255, 255, 0.06);
+	background: var(--app-drawer-surface, #25282c);
 	color: #fff;
 	font-size: 13px;
 	line-height: 1.3;
@@ -763,17 +1294,56 @@ onBeforeUnmount(() => {
 	&::placeholder {
 		color: rgba(255, 255, 255, 0.35);
 	}
+
+	&:read-only {
+		opacity: 0.72;
+		cursor: default;
+	}
+}
+
+.map-verify-form-sheet__status-badge {
+	margin-left: 8px;
+	padding: 2px 8px;
+	border-radius: 999px;
+	background: rgba(34, 197, 94, 0.16);
+	color: #4ade80;
+	font-size: 11px;
+	font-weight: 500;
+	line-height: 1.3;
+	vertical-align: middle;
+}
+
+.map-verify-form-sheet__form.is-readonly,
+.map-verify-form-sheet__dispose-card.is-readonly {
+	opacity: 0.96;
 }
 
 .map-verify-form-sheet__footer {
+	display: flex;
+	flex-direction: column;
+	align-items: stretch;
+	gap: 8px;
+	width: 100%;
+	box-sizing: border-box;
+	padding: 8px 14px 12px;
+	flex-shrink: 0;
+}
+
+.map-verify-form-sheet__footer-actions {
 	display: flex;
 	align-items: center;
 	justify-content: center;
 	gap: 12px;
 	width: 100%;
-	box-sizing: border-box;
-	padding: 8px 14px 12px;
-	flex-shrink: 0;
+}
+
+.map-verify-form-sheet__submit-tip {
+	margin: 0;
+	padding: 0 4px;
+	font-size: 12px;
+	line-height: 1.4;
+	color: #ff8f8f;
+	text-align: center;
 }
 
 .map-verify-form-sheet__btn {

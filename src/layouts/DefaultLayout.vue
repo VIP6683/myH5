@@ -8,11 +8,8 @@
 .default-layout {
 	position: relative;
 	width: 100%;
-	height: var(--app-vv-height, 100dvh);
-	max-height: var(--app-vv-height, 100dvh);
+	height: 100%;
 	overflow: hidden;
-	padding-bottom: calc(56px + env(safe-area-inset-bottom, 0px));
-	box-sizing: border-box;
 	background: var(--tabbar-bg, #000);
 }
 </style>

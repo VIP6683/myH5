@@ -3,6 +3,9 @@
  * 对齐参考项目 htzy-web-dz public/config/setting.js
  */
 window.AppConfig = {
+	/** 业务接口根地址（留空则使用 vite.config.js 打包地址；部署后可填覆盖，无需重新打包） */
+	apiBaseUrl: '',
+
 	/** SSO 登录失败或未登录时跳转的统一权限登录页 */
 	loginUrl: {
 		url: ''

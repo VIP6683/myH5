@@ -18,6 +18,7 @@ import {
 	scheduleMapViewportRefresh
 } from '../core/engine.js';
 import { waitProvinceMaskReady } from '../core/provinceMaskLayer.js';
+import { waitMosaicWmtsReady } from '../core/mosaicWmtsLayer.js';
 
 const props = defineProps({
 	mapOptions: { type: Object, default: () => ({}) },
@@ -86,7 +87,11 @@ const bindPageLifecycleRefresh = (map) => {
 
 const waitMapLoaded = (map) => {
 	const token = ++loadWaitToken;
-	Promise.all([map?.readyPromise || Promise.resolve(map), waitProvinceMaskReady()])
+	Promise.all([
+		map?.readyPromise || Promise.resolve(map),
+		waitProvinceMaskReady(),
+		waitMosaicWmtsReady()
+	])
 		.then(() => {
 			if (token === loadWaitToken) finishMapLoading(map);
 		})

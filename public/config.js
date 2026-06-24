@@ -13,12 +13,26 @@ window.APP_MAP_CONFIG = {
 	layerSource: 'online',
 
 	tokens: {
-		/** 天地图 Key，留空则使用 Mars3D 内置默认 Key；建议到 https://console.tianditu.gov.cn/api/key 申请后填入 */
+		/** 天地图 Key，留空则使用 Mars2D 内置默认 Key；建议到 https://console.tianditu.gov.cn/api/key 申请后填入 */
 		tianditu: '',
 		gaode: ''
 	},
 
-	/** 天地图影像底图（img_d） */
+	/** 业务镶嵌图 WMTS（暂不使用，仅保留配置项） */
+	mosaicMap: {
+		enabled: false,
+		replaceBasemap: false,
+		serviceListUrl: 'https://www.img.net/api/v1/service/list',
+		wmtsUrlTemplate: 'https://lxjcjg.com/access/rest/services/{serviceName}/Transfer',
+		defaultServiceName: 'MosaicMap_2024_05M_Q3',
+		zIndex: -100,
+		format: 'image/webp',
+		tileMatrixSetID: 'EPSG:4326',
+		tilematrixBefore: 'EPSG:4326:',
+		crs: 'EPSG:4326'
+	},
+
+	/** 天地图影像底图 */
 	basemap: {
 		enabled: true,
 		name: '天地图影像',
@@ -28,8 +42,9 @@ window.APP_MAP_CONFIG = {
 		key: [],
 		show: true,
 		zIndex: 1,
-		maximumLevel: 18,
+		maximumLevel: 17,
 		subdomains: '01234567',
+		/** 天地图为 CGCS2000（与 WGS84 等价），业务数据同为无偏坐标，直接叠加 */
 		chinaCRS: 'WGS84'
 	},
 
@@ -45,7 +60,7 @@ window.APP_MAP_CONFIG = {
 		show: true,
 		zIndex: 2,
 		opacity: 1,
-		maximumLevel: 18,
+		maximumLevel: 17,
 		subdomains: '01234567',
 		chinaCRS: 'WGS84'
 	},

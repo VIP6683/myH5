@@ -153,12 +153,14 @@ export async function upsertMyPositionMarker({ layer, map, lng, lat }) {
 	requestAnimationFrame(() => bindRotatorElement(myPositionGraphic));
 
 	headingMap = map;
+	if (!unbindHeadingWatch) {
+		unbindHeadingWatch = startDeviceHeadingWatch((heading) => updateMarkerRotation(heading));
+	}
+
+	// 先绑定监听器，再请求权限（Safari/iOS 场景下避免错过首次 deviceorientation 事件）。
 	const granted = await ensureDeviceOrientationPermission();
 	if (!granted) {
 		console.warn('[myPosition] 设备朝向权限未授予');
-	}
-	if (!unbindHeadingWatch) {
-		unbindHeadingWatch = startDeviceHeadingWatch((heading) => updateMarkerRotation(heading));
 	}
 	bindMapHeadingListener(map);
 	updateMarkerRotation();

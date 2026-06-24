@@ -10,14 +10,14 @@ import { createDefaultMapOptions as buildDefaultMapOptions } from '../config/bui
 import {
 	applyMapSceneRuntime,
 	bindMapInteractionPerformance,
-	getMapSceneCenter,
+	getMapSceneOptions,
 	unbindMapInteractionPerformance
 } from '../config/mapSceneConfig.js';
-import { applyCameraView, resolveCameraView } from '../utils/cameraView.js';
 import { MapEventType, emitMapEvent } from '../../core/mapEvents.js';
 import { getMapTokens } from '../../config/runtimeConfig.js';
 import { stopMyPositionMarker, upsertMyPositionMarker } from './myPositionMarker.js';
 import { addProvinceMaskLayer, clearProvinceMaskLayer } from './provinceMaskLayer.js';
+import { clearMosaicWmtsLayer, ensureMosaicWmtsLayer } from './mosaicWmtsLayer.js';
 
 installMars2d();
 
@@ -47,7 +47,7 @@ const LOCATION_MARKER_ICON_MAP = {
 	warning: warningMarkerIcon,
 	risk: warningMarkerIcon
 };
-const DEFAULT_LOCATION_FLY_TO_OPTIONS = { scale: 1.8, duration: 1.2, animate: true };
+const DEFAULT_LOCATION_FLY_TO_OPTIONS = { scale: 1.2, duration: 1.2, animate: true };
 const LOCATION_MARKER_LAYER_EVENT_BOUND_KEY = '__mars2dLocationLayerBound__';
 const MEASURE_TOOLBAR_STATE_BOUND_KEY = '__mars2dMeasureToolbarBound__';
 const MEASURE_MAP_DRAW_TRACKED_KEY = '__mars2dMeasureDrawTracked__';
@@ -67,7 +67,6 @@ let pointMeasurePopupCloseUnbind = null;
 let pointMeasureModeActive = false;
 let locationMarkerLayer = null;
 let locationMarkerClickHandler = null;
-let currentInitialView = cloneValue(getMapSceneCenter());
 let mapRenderPaused = false;
 let mapCameraLockDepth = 0;
 let savedMapInteractionState = null;
@@ -89,6 +88,10 @@ function cloneValue(value) {
 		}, {});
 	}
 	return value;
+}
+
+function withFlyToZoomLimit(options = {}) {
+	return mergeMapOptions({ maxZoom: getMapSceneOptions().maxZoom }, options);
 }
 
 export function mergeMapOptions(baseOptions = {}, extraOptions = {}) {
@@ -117,20 +120,6 @@ function getMapContainer(map) {
 
 function enhanceMapInstance(map) {
 	if (!map || map.__mars2dEnhanced__) return map;
-
-	const container = getMapContainer(map);
-
-	// Mars2D Map.container 为只读 getter，不可赋值；viewer 供旧代码兼容
-	if (!map.viewer) {
-		map.viewer = {
-			container,
-			resize: () => map.invalidateSize?.()
-		};
-	}
-
-	if (!map.setCameraView) {
-		map.setCameraView = (view, options = {}) => applyCameraView(map, view, options);
-	}
 
 	if (!map.readyPromise) {
 		map.readyPromise = Promise.resolve(map);
@@ -456,7 +445,7 @@ function applyMapInteractionState(map, state, enabled) {
 	}
 }
 
-export function initMars3dTokens() {
+export function initMapTokens() {
 	const mars2d = getMars2d();
 	if (!mars2d?.Token) return;
 	const { tianditu, gaode } = getMapTokens();
@@ -465,7 +454,7 @@ export function initMars3dTokens() {
 }
 
 export function getDefaultMapOptions() {
-	initMars3dTokens();
+	initMapTokens();
 	return cloneValue(buildDefaultMapOptions());
 }
 
@@ -483,6 +472,7 @@ export function setMapInstance(map) {
 	}
 	disableMapContextMenu(mapInstance);
 	addProvinceMaskLayer(mapInstance);
+	ensureMosaicWmtsLayer(mapInstance);
 	applyMapSceneRuntime(mapInstance);
 	bindMapInteractionPerformance(mapInstance);
 }
@@ -547,15 +537,6 @@ export function resumeMapRender(map = mapInstance) {
 	const wasPaused = mapRenderPaused;
 	mapRenderPaused = false;
 	return wasPaused;
-}
-
-export function setActiveRoute(routeName, initialView) {
-	currentInitialView = initialView ? cloneValue(initialView) : cloneValue(getMapSceneCenter());
-	return cloneValue(currentInitialView);
-}
-
-export function getActiveInitialView() {
-	return cloneValue(currentInitialView);
 }
 
 export function getMeasureClearable() {
@@ -656,15 +637,6 @@ export async function startDistanceMeasure(options = {}) {
 	}
 }
 
-export async function startHeightMeasure(options = {}) {
-	return startPointMeasure(options);
-}
-
-export async function startSectionMeasure() {
-	console.warn('[map] Mars2D 暂不支持地形剖面分析');
-	return null;
-}
-
 export async function startAreaMeasure(options = {}) {
 	const measure = ensureMeasure(options.map || mapInstance);
 	if (options.clear !== false) measure.clear();
@@ -675,11 +647,6 @@ export async function startAreaMeasure(options = {}) {
 	} finally {
 		notifyMeasureToolbarState();
 	}
-}
-
-export async function startAngleMeasure() {
-	console.warn('[map] Mars2D 暂不支持角度量算');
-	return null;
 }
 
 export async function startPointMeasure(options = {}) {
@@ -780,7 +747,10 @@ export async function addLocationMarkers(options = {}) {
 	if (graphics.length) layer.addGraphic(graphics);
 	const flyTarget = options.flyToGraphic || (options.flyToFirst ? graphics[0] : null);
 	if (flyTarget) {
-		await map.flyToGraphic(flyTarget, mergeMapOptions(DEFAULT_LOCATION_FLY_TO_OPTIONS, options.flyToOptions || {}));
+		await map.flyToGraphic(
+			flyTarget,
+			withFlyToZoomLimit(mergeMapOptions(DEFAULT_LOCATION_FLY_TO_OPTIONS, options.flyToOptions || {}))
+		);
 	}
 	return graphics;
 }
@@ -797,7 +767,10 @@ export async function locateMarker(options = {}) {
 	const graphic = createLocationMarkerGraphic(options);
 	layer.addGraphic(graphic);
 	if (options.flyTo !== false) {
-		await map.flyToGraphic(graphic, mergeMapOptions(DEFAULT_LOCATION_FLY_TO_OPTIONS, options.flyToOptions || {}));
+		await map.flyToGraphic(
+			graphic,
+			withFlyToZoomLimit(mergeMapOptions(DEFAULT_LOCATION_FLY_TO_OPTIONS, options.flyToOptions || {}))
+		);
 	}
 	if (options.openPopup) graphic.openPopup();
 	return graphic;
@@ -854,42 +827,14 @@ export async function locateMyPosition(options = {}) {
 	const layer = await ensureLocationMarkerLayer(map);
 	const graphic = await upsertMyPositionMarker({ layer, map, lng, lat, alt });
 	if (options.flyTo !== false) {
-		await map.flyToGraphic(graphic, mergeMapOptions(DEFAULT_LOCATION_FLY_TO_OPTIONS, { scale: 2.2 }, options.flyToOptions || {}));
+		await map.flyToGraphic(
+			graphic,
+			withFlyToZoomLimit(
+				mergeMapOptions(DEFAULT_LOCATION_FLY_TO_OPTIONS, { scale: 1.4 }, options.flyToOptions || {})
+			)
+		);
 	}
 	return graphic;
-}
-
-export async function resetMapView(options = {}) {
-	const map = options.map || mapInstance;
-	if (!map) return false;
-	stopMeasureDrawing();
-	return applyCameraView(map, getActiveInitialView(), { duration: options.duration ?? 1.2 });
-}
-
-export function zoomMapIn(options = {}) {
-	const map = options.map || mapInstance;
-	if (!map?.zoomIn) return false;
-	map.zoomIn(options.relativeAmount ?? 1);
-	return true;
-}
-
-export function zoomMapOut(options = {}) {
-	const map = options.map || mapInstance;
-	if (!map?.zoomOut) return false;
-	map.zoomOut(options.relativeAmount ?? 1);
-	return true;
-}
-
-export async function applyRouteCamera(routeName, options = {}) {
-	const map = options.map || mapInstance;
-	setActiveRoute(routeName, options.initialView);
-	if (!map) return false;
-	if (options.clearMeasure) clearMeasure();
-	else stopMeasureDrawing();
-	if (options.clearMarkers !== false) await clearLocationMarkers({ map });
-	const result = applyCameraView(map, getActiveInitialView(), { duration: options.duration ?? 0 });
-	scheduleMapViewportRefresh(map, options.duration ? 200 : 0);
-	return result;
 }
 
 function cleanupMapAttachments(map) {
@@ -898,6 +843,7 @@ function cleanupMapAttachments(map) {
 	clearMeasure();
 	removePointMeasureGraphic();
 	clearProvinceMaskLayer(map);
+	clearMosaicWmtsLayer(map);
 	if (measureInstance) {
 		measureInstance.destroy();
 		measureInstance = null;
@@ -931,7 +877,6 @@ function resetMapModuleState() {
 	mapCameraLockDepth = 0;
 	savedMapInteractionState = null;
 	mapRenderPaused = false;
-	currentInitialView = cloneValue(getMapSceneCenter());
 	resetMapViewportCache();
 }
 
@@ -943,14 +888,6 @@ export function canReuseMapInstance(map, host) {
 	if (!map || map.isDestroy || !host) return false;
 	const container = getMapContainer(map);
 	return container === host || host.contains(container);
-}
-
-export function setCompassParentContainer() {}
-export function showCompass() {}
-export function hideCompass() {}
-export function to2d() {}
-export function to3d() {
-	console.warn('[map] Mars2D 仅支持二维地图');
 }
 
 export function requestMapRender(map = mapInstance) {

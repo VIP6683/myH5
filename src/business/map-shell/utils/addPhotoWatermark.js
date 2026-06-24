@@ -93,7 +93,7 @@ function expandWatermarkLines(ctx, lines, maxTextWidth) {
 
 function drawWatermark(ctx, canvas, lines) {
 	const padding = Math.max(8, Math.round(canvas.width * 0.014));
-	const fontSize = Math.max(12, Math.round(canvas.width * 0.018));
+	const fontSize = Math.max(14, Math.round(canvas.width * 0.022));
 	const lineHeight = Math.round(fontSize * 1.4);
 	const maxTextWidth = Math.max(160, Math.round(canvas.width * 0.72));
 

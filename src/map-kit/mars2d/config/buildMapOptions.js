@@ -1,4 +1,4 @@
-import { getAppMapConfig, getMapTokens, usesBackendLayers } from '../../config/runtimeConfig.js';
+import { getAppMapConfig, getMapTokens, usesBackendLayers, usesMosaicBasemap } from '../../config/runtimeConfig.js';
 import { isPlainObject, mergePlain } from '../../config/mapSceneConfig.js';
 import { getMapSceneOptions } from './mapSceneConfig.js';
 import { resolveCameraView } from '../utils/cameraView.js';
@@ -6,7 +6,7 @@ import { resolveCameraView } from '../utils/cameraView.js';
 function pickLayerFields(source = {}) {
 	const fields = [
 		'name', 'type', 'layer', 'url', 'key', 'show', 'zIndex', 'opacity', 'alpha',
-		'maximumLevel', 'minimumLevel', 'subdomains', 'chinaCRS', 'crs', 'srs',
+		'maximumLevel', 'minimumLevel', 'maxZoom', 'maxNativeZoom', 'subdomains', 'chinaCRS', 'crs', 'srs',
 		'rectangle', 'proxy', 'queryParameters', 'parameters', 'format', 'styles',
 		'version', 'tileMatrixSetID', 'tileMatrixLabels', 'width', 'height', 'request'
 	];
@@ -37,6 +37,25 @@ function buildOnlineOrXyzLayer(layerConfig) {
 		if (tianditu) {
 			layer.key = tianditu;
 		}
+	}
+
+	return layer;
+}
+
+/** 瓦片最高可用级别与地图 maxZoom 对齐，超出时复用最高级瓦片缩放，避免露白底 */
+function applyTileZoomLimits(layer, scene) {
+	if (!layer) {
+		return layer;
+	}
+
+	const nativeMax = Number(layer.maximumLevel ?? scene.maxZoom);
+	const mapMax = Number(scene.maxZoom);
+	if (Number.isFinite(nativeMax)) {
+		layer.maximumLevel = nativeMax;
+		layer.maxNativeZoom = nativeMax;
+	}
+	if (Number.isFinite(mapMax)) {
+		layer.maxZoom = mapMax;
 	}
 
 	return layer;
@@ -76,7 +95,7 @@ export function buildMapLayerOptions() {
 	const layers = [];
 	const backendOnly = usesBackendLayers();
 
-	if (!backendOnly && config.basemap?.enabled !== false) {
+	if (!backendOnly && !usesMosaicBasemap() && config.basemap?.enabled !== false) {
 		const basemapLayer = buildOnlineOrXyzLayer(config.basemap);
 		if (basemapLayer?.type === 'wms') {
 			layers.push({ ...basemapLayer, zIndex: basemapLayer.zIndex ?? 1, show: basemapLayer.show ?? true });
@@ -97,6 +116,13 @@ export function buildMapLayerOptions() {
 		isPlainObject(config.scene) && Object.keys(config.scene).length > 0
 			? mergePlain({ ...sceneFromConfig }, config.scene)
 			: sceneFromConfig;
+
+	if (!backendOnly && !usesMosaicBasemap() && basemaps.length) {
+		basemaps.forEach((layer) => applyTileZoomLimits(layer, scene));
+	}
+	if (!backendOnly) {
+		layers.forEach((layer) => applyTileZoomLimits(layer, scene));
+	}
 
 	return { basemaps, layers, scene };
 }

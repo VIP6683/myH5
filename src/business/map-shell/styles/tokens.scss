@@ -33,7 +33,23 @@
 
 	--app-shadow-card: 0 0 8px rgba(0, 0, 0, 0.1);
 
+	/* 抽屉/面板统一底色 */
+	--app-drawer-bg: rgba(25, 28, 33, 1);
+	--app-drawer-surface: #25282c;
+
+	/* 筛选面板 */
+	--app-filter-panel-bg: #101820;
+	--app-filter-chip-radius: 999px;
+	--app-filter-chip-bg: rgba(58, 58, 60, 0.85);
+	--app-filter-chip-color: rgba(255, 255, 255, 0.88);
+	--app-filter-chip-active-bg: #12b6d6;
+	--app-filter-chip-active-color: #fff;
+
 	--tabbar-bg: #000;
 
 	--tabbar-shadow-float: none;
+
+	/* 页面底色统一（统计页头部 / 底部菜单） */
+	--tabbar-bg: #141414;
+	--app-tab-bar-height: calc(52px + env(safe-area-inset-bottom, 0px));
 }

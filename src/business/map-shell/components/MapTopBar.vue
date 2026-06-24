@@ -1,6 +1,7 @@
 <script setup>
 import { computed, onBeforeUnmount, ref, watch } from 'vue';
 import { lockMapSurface, unlockMapSurface } from '../composables/mapSurfaceLock.js';
+import { createEmptyFilters } from '../utils/monitorFilters.js';
 import MapFilterPanel from './MapFilterPanel.vue';
 
 const props = defineProps({
@@ -26,6 +27,14 @@ const props = defineProps({
 			{ id: 'pending-verify', label: '待核查', count: 5 },
 			{ id: 'pending-dispose', label: '待处置', count: 3 }
 		]
+	},
+	monitorType: {
+		type: String,
+		default: 'area'
+	},
+	filters: {
+		type: Object,
+		default: () => createEmptyFilters()
 	}
 });
 
@@ -38,15 +47,6 @@ const emit = defineEmits([
 
 const filterOpen = ref(false);
 const filterPanelRef = ref(null);
-
-const createEmptyFilters = () => ({
-	year: '',
-	objectType: [],
-	verifyStatus: '',
-	disposeStatus: ''
-});
-
-const appliedFilters = ref(createEmptyFilters());
 
 const activeTab = computed({
 	get: () => props.modelValue,
@@ -82,7 +82,6 @@ const toggleFilter = () => {
 };
 
 const onFilterConfirm = (filters) => {
-	appliedFilters.value = filters;
 	emit('filter-change', filters);
 	closeFilter();
 };
@@ -187,7 +186,8 @@ onBeforeUnmount(() => {
 			<div v-if="filterOpen" class="map-top-bar__filter-wrap">
 				<MapFilterPanel
 					ref="filterPanelRef"
-					v-model="appliedFilters"
+					:model-value="filters"
+					:monitor-type="monitorType"
 					@confirm="onFilterConfirm"
 					@reset="onFilterReset"
 				/>
@@ -296,7 +296,7 @@ onBeforeUnmount(() => {
 	border: 0;
 	background: transparent;
 	color: rgba(255, 255, 255, 0.82);
-	font-size: 15px;
+	font-size: 14px;
 	line-height: 1.2;
 	cursor: pointer;
 	-webkit-tap-highlight-color: transparent;
@@ -315,11 +315,12 @@ onBeforeUnmount(() => {
 	}
 
 	&.is-active {
-		color: var(--app-accent, #1cded4);
-		font-weight: 500;
+		color: #1cded4;
+		font-weight: 700;
+		font-size: 14px;
 
 		&::after {
-			background: var(--app-accent, #1cded4);
+			background: #1cded4;
 		}
 	}
 }

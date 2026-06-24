@@ -29,7 +29,7 @@ const LAYER_RESOLVERS = {
 	[MAP_LAYER_KEYS.RISK]: (map) => map?.getLayerById?.('__screen_template_risk_layer__') || null
 };
 
-/** 根据图层键解析 Mars3D 图层实例 */
+/** 根据图层键解析 Mars2D 图层实例 */
 export function resolveManagedLayer(layerKey, map) {
 	const resolver = LAYER_RESOLVERS[layerKey];
 	if (!resolver || !map) {
@@ -69,7 +69,6 @@ export function setLayerVisible(layerKey, visible, map) {
 
 	layer.show = !!visible;
 	map?.invalidateSize?.();
-	map?.viewer?.scene?.requestRender?.();
 	return true;
 }
 

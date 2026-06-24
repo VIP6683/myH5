@@ -10,7 +10,8 @@ const BODY_LOCK_CLASS = 'is-scroll-locked';
 /** 弹层内允许滚动的区域（不含页面背景列表） */
 const SCROLL_ALLOW_SELECTOR = [
 	'.draggable-bottom-sheet__body',
-	'.map-verify-form-sheet__body',
+	'.map-verify-form-sheet__scroll',
+	'[data-bottom-sheet-scroll]',
 	'.map-patch-list-sheet__table-wrap',
 	'.map-feature-detail-sheet__list',
 	'.map-filter-panel__body',
@@ -181,6 +182,12 @@ function isInsideOverlay(target) {
 	return Boolean(target?.closest?.(OVERLAY_SELECTOR));
 }
 
+function isMapInteractionTarget(target) {
+	return Boolean(
+		target?.closest?.('.mapHost, .mars3d-container, .leaflet-container')
+	);
+}
+
 function canScrollElement(el, deltaY) {
 	if (!el || el.scrollHeight <= el.clientHeight + 1) {
 		return false;
@@ -245,6 +252,9 @@ function handleTouchMove(event) {
 	}
 
 	if (isInsideOverlay(event.target) || lockDepth > 0) {
+		if (isMapInteractionTarget(event.target)) {
+			return;
+		}
 		event.preventDefault();
 	}
 }
@@ -258,6 +268,9 @@ function handleWheel(event) {
 	}
 
 	if (isInsideOverlay(event.target) || lockDepth > 0) {
+		if (isMapInteractionTarget(event.target)) {
+			return;
+		}
 		event.preventDefault();
 		event.stopPropagation();
 	}

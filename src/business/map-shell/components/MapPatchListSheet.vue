@@ -1,11 +1,38 @@
 <script setup>
-import { computed, ref } from 'vue';
+import { computed, ref, watch } from 'vue';
 import DraggableBottomSheet from '../../../components/DraggableBottomSheet.vue';
-import { filterMonitorPatches, toPatchListRow } from '../utils/filterMonitorPatches.js';
+import { useLineTaskList } from '../../../composables/useLineTaskList.js';
+import { useTaskList } from '../../../composables/useTaskList.js';
+import { toPatchListRow } from '../utils/filterMonitorPatches.js';
+import { clearMonitorPatchHighlight } from '../utils/highlightMonitorPatch.js';
 import { locateMonitorPatch } from '../utils/locateMonitorPatch.js';
-import { getMonitorPatches } from '../utils/monitorMockStore.js';
+
+const {
+	visiblePatches,
+	total: taskListTotal,
+	listHasMore: taskListListHasMore,
+	loading: taskListLoading,
+	loadingMore: taskListLoadingMore,
+	revealMoreListRows
+} = useTaskList();
+
+const {
+	visiblePatches: lineVisiblePatches,
+	total: lineTaskListTotal,
+	listHasMore: lineTaskListListHasMore,
+	loading: lineTaskListLoading,
+	loadingMore: lineTaskListLoadingMore,
+	revealMoreLineListRows
+} = useLineTaskList();
 
 const visible = defineModel('visible', { type: Boolean, default: false });
+const snap = defineModel('snap', {
+	type: String,
+	default: 'collapsed',
+	validator: (value) => ['collapsed', 'peek', 'expanded'].includes(value)
+});
+
+const PATCH_LIST_SHEET_Z_INDEX = 1050;
 
 const props = defineProps({
 	activeTab: {
@@ -20,7 +47,7 @@ const props = defineProps({
 		type: Object,
 		default: () => ({
 			year: '',
-			objectType: [],
+			objectType: '',
 			verifyStatus: '',
 			disposeStatus: ''
 		})
@@ -28,25 +55,87 @@ const props = defineProps({
 });
 
 const locatingId = ref('');
-const expanded = ref(false);
+const tableWrapRef = ref(null);
 
-const shadeOpacity = computed(() => (expanded.value ? 0.35 : 0));
-const closeOnShade = computed(() => expanded.value);
-
-const close = () => {
-	visible.value = false;
-};
+const shadeOpacity = computed(() => (snap.value === 'expanded' ? 0.35 : 0));
+const closeOnShade = computed(() => snap.value === 'expanded');
 
 const patchKind = computed(() => (props.activeTab === 'line-monitor' ? 'line' : 'area'));
+const isAreaList = computed(() => patchKind.value === 'area');
+const isLineList = computed(() => patchKind.value === 'line');
 
 const listRows = computed(() => {
-	const patches = getMonitorPatches(patchKind.value);
-	const filtered = filterMonitorPatches(patches, {
-		filters: props.filters,
-		headerTab: props.headerTab
-	});
-	return filtered.map(toPatchListRow);
+	if (isAreaList.value) {
+		return visiblePatches.value.map(toPatchListRow);
+	}
+
+	if (isLineList.value) {
+		return lineVisiblePatches.value.map(toPatchListRow);
+	}
+
+	return [];
 });
+
+const listLoading = computed(() =>
+	isLineList.value ? lineTaskListLoading.value : taskListLoading.value
+);
+
+const listLoadingMore = computed(() =>
+	isLineList.value ? lineTaskListLoadingMore.value : taskListLoadingMore.value
+);
+
+const listTotal = computed(() => (isLineList.value ? lineTaskListTotal.value : taskListTotal.value));
+
+const listHasMore = computed(() =>
+	isLineList.value ? lineTaskListListHasMore.value : taskListListHasMore.value
+);
+
+const listFooterText = computed(() => {
+	if (!isAreaList.value && !isLineList.value) {
+		return '';
+	}
+	if (listLoading.value) {
+		return '加载中...';
+	}
+	if (listLoadingMore.value) {
+		return '加载更多...';
+	}
+	if (!listRows.value.length) {
+		return '';
+	}
+	if (listHasMore.value) {
+		return `已显示 ${listRows.value.length} / ${listTotal.value}，上滑加载更多`;
+	}
+	return `已显示全部 ${listRows.value.length} 条`;
+});
+
+const tryLoadMore = async () => {
+	if (!listHasMore.value || listLoading.value || listLoadingMore.value) {
+		return;
+	}
+
+	try {
+		if (isLineList.value) {
+			await revealMoreLineListRows();
+			return;
+		}
+		await revealMoreListRows();
+	} catch {
+		// 分页失败时保留已加载数据
+	}
+};
+
+const onTableScroll = (event) => {
+	const target = event.target;
+	if (!target) {
+		return;
+	}
+
+	const threshold = 48;
+	if (target.scrollTop + target.clientHeight >= target.scrollHeight - threshold) {
+		void tryLoadMore();
+	}
+};
 
 const onLocate = async (row) => {
 	if (!row?.id || locatingId.value) {
@@ -55,36 +144,57 @@ const onLocate = async (row) => {
 
 	locatingId.value = row.id;
 	try {
-		await locateMonitorPatch(row.id);
+		await locateMonitorPatch(row.id, row.patch);
 	} finally {
 		locatingId.value = '';
 	}
 };
+
+watch(snap, (value) => {
+	if (value === 'expanded') {
+		requestAnimationFrame(() => {
+			onTableScroll({ target: tableWrapRef.value });
+		});
+	}
+});
+
+watch(visible, (value) => {
+	if (!value) {
+		clearMonitorPatchHighlight();
+	}
+});
 </script>
 
 <template>
 	<DraggableBottomSheet
 		v-model:visible="visible"
-		v-model:expanded="expanded"
+		v-model:snap="snap"
 		aria-label="图斑列表"
 		theme="dark"
+		:z-index="PATCH_LIST_SHEET_Z_INDEX"
 		panel-class="map-patch-list-sheet__panel"
+		body-scroll="inner"
 		peek-height="38vh"
-		peek-pass-through
+		collapsed-height="20"
+		persistent
+		:allow-drag="true"
 		:close-on-shade="closeOnShade"
 		:shade-opacity="shadeOpacity"
 	>
 		<template #header>
 			<header class="map-patch-list-sheet__header">
 				<h2 class="map-patch-list-sheet__title">图斑列表</h2>
-				<button type="button" class="map-patch-list-sheet__close" @click="close">
-					取消
-				</button>
 			</header>
 		</template>
 
 		<div class="map-patch-list-sheet__body">
-			<div class="map-patch-list-sheet__table-wrap">
+			<div
+				ref="tableWrapRef"
+				class="map-patch-list-sheet__table-wrap"
+				:class="{ 'is-expanded': snap === 'expanded' }"
+				data-bottom-sheet-scroll
+				@scroll.passive="onTableScroll"
+			>
 				<table class="map-patch-list-sheet__table">
 					<thead>
 						<tr>
@@ -96,7 +206,7 @@ const onLocate = async (row) => {
 						</tr>
 					</thead>
 					<tbody>
-						<tr v-if="!listRows.length">
+						<tr v-if="!listRows.length && !listLoading">
 							<td class="map-patch-list-sheet__empty" colspan="5">暂无数据</td>
 						</tr>
 						<tr v-for="row in listRows" :key="row.id">
@@ -117,6 +227,7 @@ const onLocate = async (row) => {
 						</tr>
 					</tbody>
 				</table>
+				<p v-if="listFooterText" class="map-patch-list-sheet__footer">{{ listFooterText }}</p>
 			</div>
 		</div>
 	</DraggableBottomSheet>
@@ -127,46 +238,44 @@ const onLocate = async (row) => {
 	display: flex;
 	align-items: center;
 	justify-content: space-between;
-	gap: 12px;
-	padding: 4px 16px 10px;
+	gap: 10px;
+	padding: 10px 14px 8px;
 	flex-shrink: 0;
 }
 
 .map-patch-list-sheet__title {
 	margin: 0;
-	font-size: 16px;
-	font-weight: 500;
-	color: var(--app-accent, #1cded4);
-	line-height: 1.3;
-}
-
-.map-patch-list-sheet__close {
-	flex-shrink: 0;
-	padding: 4px 0;
-	border: 0;
-	background: transparent;
-	color: rgba(255, 255, 255, 0.72);
 	font-size: 14px;
-	font-weight: 400;
-	line-height: 1.4;
-	cursor: pointer;
-	-webkit-tap-highlight-color: transparent;
-
-	&:active {
-		opacity: 0.85;
-	}
+	font-weight: 700;
+	color: #1cded4;
+	line-height: 1.25;
 }
 
 .map-patch-list-sheet__body {
 	padding: 0 12px 12px;
 	box-sizing: border-box;
 	min-height: 0;
+	flex: 1;
+	display: flex;
+	flex-direction: column;
+	height: 100%;
 }
 
 .map-patch-list-sheet__table-wrap {
+	flex: 1;
+	min-height: 0;
 	border-radius: 8px;
-	overflow: hidden;
-	background: rgba(255, 255, 255, 0.03);
+	overflow-x: hidden;
+	overflow-y: auto;
+	background: var(--app-drawer-surface, #25282c);
+	max-height: min(52vh, 420px);
+	-webkit-overflow-scrolling: touch;
+	overscroll-behavior: contain;
+	touch-action: pan-y;
+
+	&.is-expanded {
+		max-height: none;
+	}
 }
 
 .map-patch-list-sheet__table {
@@ -176,7 +285,10 @@ const onLocate = async (row) => {
 }
 
 .map-patch-list-sheet__table thead {
-	background: rgba(255, 255, 255, 0.06);
+	position: sticky;
+	top: 0;
+	z-index: 1;
+	background: var(--app-drawer-surface, #25282c);
 }
 
 .map-patch-list-sheet__table th,
@@ -229,6 +341,15 @@ const onLocate = async (row) => {
 	padding: 28px 12px !important;
 	color: rgba(255, 255, 255, 0.45) !important;
 	text-align: center !important;
+}
+
+.map-patch-list-sheet__footer {
+	margin: 0;
+	padding: 10px 12px 12px;
+	font-size: 12px;
+	line-height: 1.4;
+	color: rgba(255, 255, 255, 0.45);
+	text-align: center;
 }
 
 .map-patch-list-sheet__locate {

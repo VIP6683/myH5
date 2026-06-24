@@ -19,6 +19,20 @@ export function installVisualViewportCssVars() {
 		root.style.setProperty('--app-vv-offset-left', `${left}px`);
 		root.style.setProperty('--app-vv-height', `${height}px`);
 		root.style.setProperty('--app-vv-width', `${width}px`);
+
+		const contentEl = document.getElementById('app-content');
+		if (contentEl) {
+			const contentRect = contentEl.getBoundingClientRect();
+			root.style.setProperty('--app-content-height', `${Math.round(contentRect.height)}px`);
+		}
+
+		const tabBar = document.querySelector('.map-floating-tab-bar-wrap');
+		if (tabBar) {
+			const rect = tabBar.getBoundingClientRect();
+			root.style.setProperty('--app-tab-bar-height', `${Math.round(rect.height)}px`);
+			const chromeOffset = Math.max(0, Math.round(top + height - rect.top));
+			root.style.setProperty('--app-bottom-chrome-offset', `${chromeOffset}px`);
+		}
 	};
 
 	sync();
@@ -34,5 +48,7 @@ export function installVisualViewportCssVars() {
 		root.style.removeProperty('--app-vv-offset-left');
 		root.style.removeProperty('--app-vv-height');
 		root.style.removeProperty('--app-vv-width');
+		root.style.removeProperty('--app-content-height');
+		root.style.removeProperty('--app-bottom-chrome-offset');
 	};
 }

@@ -378,7 +378,7 @@ onBeforeUnmount(() => {
 	position: absolute;
 	top: calc(var(--map-top-bar-height, 96px) + 12px);
 	right: 8px;
-	bottom: calc(66px + env(safe-area-inset-bottom, 0px));
+	bottom: calc(108px + env(safe-area-inset-bottom, 0px));
 	z-index: 999;
 	display: flex;
 	flex-direction: column;
@@ -571,7 +571,7 @@ onBeforeUnmount(() => {
 	.map-control-panel {
 		top: 16px;
 		right: 12px;
-		bottom: calc(64px + env(safe-area-inset-bottom, 0px));
+		bottom: calc(106px + env(safe-area-inset-bottom, 0px));
 	}
 }
 </style>

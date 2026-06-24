@@ -127,3 +127,35 @@ export function useMapSlideMotion(direction = 'right', options = {}) {
 		dispose
 	};
 }
+
+/**
+ * 地图页浮层动效实例（侧栏 / 顶栏 / 底栏 / 清屏返回）
+ */
+export function createMapShellMotions() {
+	const sideMenu = useMapSlideMotion('right');
+	const topBar = useMapSlideMotion('top');
+	const bottomBar = useMapSlideMotion('bottom');
+	const backButton = useMapSlideMotion('bottom');
+
+	const playInitialEnter = () => {
+		sideMenu.playInitialEnter();
+		topBar.playInitialEnter();
+		bottomBar.playInitialEnter();
+	};
+
+	const disposeAll = () => {
+		sideMenu.dispose();
+		topBar.dispose();
+		bottomBar.dispose();
+		backButton.dispose();
+	};
+
+	return {
+		sideMenu,
+		topBar,
+		bottomBar,
+		backButton,
+		playInitialEnter,
+		disposeAll
+	};
+}

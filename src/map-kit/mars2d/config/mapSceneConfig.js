@@ -78,6 +78,31 @@ export function applyMapSceneRuntime(map) {
 	});
 }
 
-export function bindMapInteractionPerformance() {}
+export function bindMapInteractionPerformance(map) {
+	bindZoomLimitGuard(map);
+}
+
+function bindZoomLimitGuard(map) {
+	const mars2d = globalThis.mars2d;
+	if (!map || !mars2d || map.__zoomLimitGuardBound__) {
+		return;
+	}
+
+	const { minZoom, maxZoom } = getMapSceneOptions();
+	const clampZoom = () => {
+		const zoom = map.getZoom?.();
+		if (!Number.isFinite(zoom)) {
+			return;
+		}
+		if (zoom > maxZoom) {
+			map.setZoom(maxZoom);
+		} else if (zoom < minZoom) {
+			map.setZoom(minZoom);
+		}
+	};
+
+	map.on(mars2d.EventType.zoomend, clampZoom);
+	map.__zoomLimitGuardBound__ = true;
+}
 
 export function unbindMapInteractionPerformance() {}

@@ -1,4 +1,4 @@
-/** Vue provide/inject 键，与 MapContainer、MarsMap、业务页共享地图实例 */
+/** Vue provide/inject 键，与 MapContainer、Mars2dMap、业务页共享地图实例 */
 export const MAP_CONTEXT_KEY = 'mapInstance';
 
 /** MapContainer 内固定的 Cesium 挂载点（禁止 appendChild 搬运） */
@@ -21,6 +21,9 @@ export const PROVINCE_MASK_LAYER_ID = '__screen_template_province_mask_layer__';
 
 /** 内网 getLayersData 注记 WMTS 图层 id（对齐原 Map.vue noteLayer） */
 export const BACKEND_NOTE_LAYER_ID = '__backend_note_layer__';
+
+/** 业务镶嵌图 WMTS 图层 id（对齐 kjydd Map.vue id: dt） */
+export const MOSAIC_WMTS_LAYER_ID = '__mosaic_wmts_layer__';
 
 /** 湖南省边界 GeoJSON（国家统计局区划） */
 export const HUNAN_BOUNDARY_GEOJSON_URL = '/430000.json';

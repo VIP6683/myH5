@@ -1,4 +1,10 @@
 import { createRouter, createWebHistory } from 'vue-router';
+import {
+	getDefaultMonitorPath,
+	hasAreaMonitorAccess,
+	hasLineMonitorAccess,
+	isLoggedIn
+} from '../utils/auth.js';
 import MapLayout from '../layouts/MapLayout.vue';
 import DefaultLayout from '../layouts/DefaultLayout.vue';
 
@@ -14,18 +20,15 @@ const router = createRouter({
 			component: MapLayout,
 			name: 'MapLayout',
 			meta: { layout: 'map' },
-			redirect: '/statistics',
 			children: [
 				{
 					path: 'area',
 					name: 'area',
-					component: () => import('../views/area/index.vue'),
 					meta: { tab: 'area-monitor', title: '面状异物监测' }
 				},
 				{
 					path: 'line',
 					name: 'line',
-					component: () => import('../views/line/index.vue'),
 					meta: { tab: 'line-monitor', title: '线状异物监测' }
 				}
 			]
@@ -57,6 +60,25 @@ const router = createRouter({
 			]
 		}
 	]
+});
+
+router.beforeEach((to, _from, next) => {
+	if (!isLoggedIn()) {
+		next();
+		return;
+	}
+
+	const tab = to.matched.find((record) => record.meta?.tab)?.meta?.tab;
+	if (tab === 'area-monitor' && !hasAreaMonitorAccess()) {
+		next(getDefaultMonitorPath());
+		return;
+	}
+	if (tab === 'line-monitor' && !hasLineMonitorAccess()) {
+		next(getDefaultMonitorPath());
+		return;
+	}
+
+	next();
 });
 
 export default router;

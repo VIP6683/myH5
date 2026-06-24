@@ -1,7 +1,12 @@
 import { ref } from 'vue';
 import { clearLogin, isLoggedIn } from '../utils/auth.js';
 
-const loggedIn = ref(isLoggedIn());
+export const loggedIn = ref(isLoggedIn());
+
+export function handleAuthExpired() {
+	clearLogin();
+	loggedIn.value = false;
+}
 
 export function useAuthSession() {
 	function markLoggedIn() {
@@ -9,8 +14,7 @@ export function useAuthSession() {
 	}
 
 	function logout() {
-		clearLogin();
-		loggedIn.value = false;
+		handleAuthExpired();
 	}
 
 	function clearAllData() {

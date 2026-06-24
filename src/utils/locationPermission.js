@@ -1,4 +1,4 @@
-import { isWeChatEnv, getWeChatCurrentLocation } from '../business/nav-demo/utils/wechatJssdk.js';
+// 临时测试：微信内也走 navigator.geolocation，验证 HTTPS 下是否可用
 
 /** Geolocation 错误码 */
 export const LOCATION_ERROR = {
@@ -42,10 +42,6 @@ export function canUseNativeGeolocation() {
  * @returns {'wechat' | 'native' | 'unsupported'}
  */
 export function getLocationProvider() {
-	if (isWeChatEnv()) {
-		return 'wechat';
-	}
-
 	return canUseNativeGeolocation() ? 'native' : 'unsupported';
 }
 
@@ -55,10 +51,6 @@ export function getLocationProvider() {
  * @returns {Promise<'granted' | 'prompt' | 'denied' | 'unknown'>}
  */
 export async function queryGeolocationPermission() {
-	if (getLocationProvider() === 'wechat') {
-		return 'unknown';
-	}
-
 	if (typeof navigator === 'undefined' || !navigator.permissions?.query) {
 		return 'unknown';
 	}
@@ -144,16 +136,11 @@ function getNativeCurrentLocation(options = {}) {
 }
 
 /**
- * 获取当前设备经纬度。
- * 微信内优先 wx.getLocation；其他环境使用浏览器 Geolocation（需 HTTPS）。
- * @param {PositionOptions & { coordinateType?: 'gcj02' | 'wgs84' }} [options]
+ * 获取当前设备经纬度（navigator.geolocation，需 HTTPS）。
+ * @param {PositionOptions} [options]
  * @returns {Promise<{ lng: number, lat: number, accuracy?: number, altitude?: number, source: string }>}
  */
 export async function getCurrentLocation(options = {}) {
-	if (getLocationProvider() === 'wechat') {
-		return getWeChatCurrentLocation(options);
-	}
-
 	if (typeof navigator === 'undefined' || !navigator.geolocation) {
 		throw new Error('当前浏览器不支持定位');
 	}

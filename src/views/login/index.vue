@@ -1,8 +1,10 @@
 <script setup>
 import { onBeforeUnmount, ref } from 'vue';
-import { setLogin } from '../utils/auth.js';
-import loginBg from '../assets/images/bg/space-circle-outer.png';
-import rabbitMascot from '../assets/images/profile/rabbit-mascot.png';
+import { sendSmsCode, smsLogin } from '../../api/auth.js';
+import { fetchUserInfo } from '../../api/user.js';
+import { setLogin, setUserInfo } from '../../utils/auth.js';
+import loginBg from '../../assets/images/bg/space-circle-outer.png';
+import rabbitMascot from '../../assets/images/profile/rabbit-mascot.png';
 
 const emit = defineEmits(['success']);
 
@@ -44,23 +46,28 @@ const startCountdown = () => {
 	}, 1000);
 };
 
-const onSendCode = () => {
+const onSendCode = async () => {
 	if (countdown.value > 0 || sending.value) return;
 
-	if (!validatePhone(phone.value.trim())) {
+	const phoneValue = phone.value.trim();
+	if (!validatePhone(phoneValue)) {
 		showToast('请输入正确的手机号');
 		return;
 	}
 
 	sending.value = true;
-	showToast('验证码已发送', 'success');
-	startCountdown();
-	setTimeout(() => {
+	try {
+		await sendSmsCode(phoneValue);
+		showToast('验证码已发送', 'success');
+		startCountdown();
+	} catch (error) {
+		showToast(error?.message || '验证码发送失败');
+	} finally {
 		sending.value = false;
-	}, 600);
+	}
 };
 
-const onLogin = () => {
+const onLogin = async () => {
 	if (logging.value) return;
 
 	const phoneValue = phone.value.trim();
@@ -77,14 +84,18 @@ const onLogin = () => {
 	}
 
 	logging.value = true;
-	const fakeToken = `demo-token-${Date.now()}`;
-	setLogin(fakeToken, phoneValue);
-	showToast('登录成功', 'success');
-
-	setTimeout(() => {
-		logging.value = false;
+	try {
+		const { token } = await smsLogin(phoneValue, codeValue);
+		setLogin(token, phoneValue);
+		const userInfo = await fetchUserInfo();
+		setUserInfo(userInfo);
+		showToast('登录成功', 'success');
 		emit('success');
-	}, 500);
+	} catch (error) {
+		showToast(error?.message || '登录失败');
+	} finally {
+		logging.value = false;
+	}
 };
 
 onBeforeUnmount(() => {
@@ -340,6 +351,22 @@ $login-border: rgba(255, 255, 255, 0.1);
 		font-size: 15px;
 		font-weight: 500;
 	}
+
+	&:-webkit-autofill,
+	&:-webkit-autofill:hover,
+	&:-webkit-autofill:focus,
+	&:-webkit-autofill:active {
+		-webkit-box-shadow: 0 0 0 1000px rgba(255, 255, 255, 0.12) inset;
+		box-shadow: 0 0 0 1000px rgba(255, 255, 255, 0.12) inset;
+		-webkit-text-fill-color: $login-text;
+		caret-color: $login-text;
+		transition: background-color 9999s ease-out 0s;
+	}
+}
+
+.login-page__input-wrap:focus-within .login-page__input:-webkit-autofill {
+	-webkit-box-shadow: 0 0 0 1000px rgba(18, 34, 49, 0.88) inset;
+	box-shadow: 0 0 0 1000px rgba(18, 34, 49, 0.88) inset;
 }
 
 .login-page__code-btn {

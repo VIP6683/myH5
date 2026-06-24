@@ -1,5 +1,6 @@
 <script setup>
 import { computed, inject, onBeforeUnmount, ref, watch } from 'vue';
+import { parseAbnormalPhotoUrls } from '../../../api/statistics.js';
 import { MAP_UI_OVERLAY_KEY } from '../composables/useMapUiOverlay.js';
 
 const visible = defineModel('visible', { type: Boolean, default: false });
@@ -8,6 +9,10 @@ const props = defineProps({
 	detail: {
 		type: Object,
 		default: null
+	},
+	loading: {
+		type: Boolean,
+		default: false
 	}
 });
 
@@ -21,7 +26,28 @@ const isPanelSettled = ref(false);
 
 let leaveTimer = null;
 
-const title = computed(() => (props.detail?.kind === 'line' ? '线状详情' : '图斑详情'));
+const title = computed(() => '图斑详情');
+
+const verifyActionLabel = computed(() => {
+	const info = props.detail?.additionalInfo;
+	if (!info) {
+		return '开始核查';
+	}
+
+	const isChecked = Number(info.checkStatus) === 1;
+	const isDisposed = Number(info.disposalStatus) === 1;
+
+	if (isChecked) {
+		return isDisposed ? '查看核查信息' : '继续处置';
+	}
+
+	const hasCheckInfo =
+		parseAbnormalPhotoUrls(info.checkPhotos).length > 0 ||
+		Boolean(info.checkOpinion) ||
+		Boolean(info.checkRemark);
+
+	return hasCheckInfo ? '查看核查信息' : '开始核查';
+});
 
 const rows = computed(() => {
 	const detail = props.detail;
@@ -29,16 +55,25 @@ const rows = computed(() => {
 		return [];
 	}
 
-	const commonRows = [
-		{ label: '变电站编号', value: detail.substationNo },
-		{ label: '期数', value: detail.phase },
+	const commonRows =
 		detail.kind === 'line'
-			? { label: '线段长度(m)', value: detail.lineLength }
-			: { label: '图斑面积(m²)', value: detail.patchArea },
-		{ label: '异物编号', value: detail.objectNo },
-		{ label: '异物类型', value: detail.objectTypeLabel },
-		{ label: '异物距离(m)', value: detail.objectDistance }
-	];
+			? [
+					{ label: '变电站编号', value: detail.substationNo },
+					{ label: '所属杆塔区段', value: detail.poleSection },
+					{ label: '期数', value: detail.phase },
+					{ label: '图斑面积(m²)', value: detail.patchArea },
+					{ label: '异物编号', value: detail.objectNo },
+					{ label: '异物类型', value: detail.objectTypeLabel },
+					{ label: '异物距离(m)', value: detail.distanceMeter }
+				]
+			: [
+					{ label: '变电站编号', value: detail.substationNo },
+					{ label: '期数', value: detail.phase },
+					{ label: '图斑面积(m²)', value: detail.patchArea },
+					{ label: '异物编号', value: detail.objectNo },
+					{ label: '异物类型', value: detail.objectTypeLabel },
+					{ label: '异物距离(m)', value: detail.objectDistance }
+				];
 
 	return commonRows.filter(
 		(row) => row.value !== undefined && row.value !== null && row.value !== ''
@@ -116,7 +151,7 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-	<Teleport to="body">
+	<Teleport to="#app-content">
 		<div
 			v-if="rendered"
 			class="map-feature-detail-sheet"
@@ -140,12 +175,13 @@ onBeforeUnmount(() => {
 						class="map-feature-detail-sheet__action"
 						@click="onStartVerify"
 					>
-						开始核查
+						{{ verifyActionLabel }}
 					</button>
 				</header>
 
 				<div class="map-feature-detail-sheet__body">
-					<dl class="map-feature-detail-sheet__list">
+					<p v-if="loading" class="map-feature-detail-sheet__loading">加载中...</p>
+					<dl v-else class="map-feature-detail-sheet__list">
 						<div v-for="row in rows" :key="row.label" class="map-feature-detail-sheet__row">
 							<dt class="map-feature-detail-sheet__label">{{ row.label }}</dt>
 							<dd class="map-feature-detail-sheet__value">{{ row.value }}</dd>
@@ -159,7 +195,7 @@ onBeforeUnmount(() => {
 
 <style scoped lang="scss">
 .map-feature-detail-sheet {
-	position: fixed;
+	position: absolute;
 	inset: 0;
 	z-index: 2500;
 	display: flex;
@@ -186,9 +222,8 @@ onBeforeUnmount(() => {
 	box-sizing: border-box;
 	overflow: hidden;
 	pointer-events: auto;
-	background: #1a1a1a;
+	background: var(--app-drawer-bg, rgba(25, 28, 33, 1));
 	border-radius: 12px 12px 0 0;
-	padding-bottom: env(safe-area-inset-bottom, 0px);
 	max-height: min(50vh, 360px);
 	display: flex;
 	flex-direction: column;
@@ -233,8 +268,9 @@ onBeforeUnmount(() => {
 .map-feature-detail-sheet__title {
 	margin: 0;
 	font-size: 15px;
-	font-weight: 500;
-	color: var(--app-accent, #1cded4);
+	font-weight: 700;
+	color: #1cDED4;
+	font-size: 14px;
 	line-height: 1.25;
 }
 
@@ -257,6 +293,14 @@ onBeforeUnmount(() => {
 	}
 }
 
+.map-feature-detail-sheet__loading {
+	margin: 0;
+	padding: 16px 12px;
+	font-size: 12px;
+	color: rgba(255, 255, 255, 0.68);
+	text-align: center;
+}
+
 .map-feature-detail-sheet__body {
 	padding: 0 14px 12px;
 	min-width: 0;
@@ -272,7 +316,7 @@ onBeforeUnmount(() => {
 	margin: 0;
 	padding: 8px 12px;
 	border-radius: 8px;
-	background: rgba(255, 255, 255, 0.04);
+	background: var(--app-drawer-surface, #25282c);
 }
 
 .map-feature-detail-sheet__row {
