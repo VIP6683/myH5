@@ -220,6 +220,7 @@ const onLogout = () => {
 	padding: 36px 16px calc(16px + env(safe-area-inset-bottom, 0px));
 	overflow-y: auto;
 	-webkit-overflow-scrolling: touch;
+	overscroll-behavior: contain;
 	position: relative;
 	z-index: 2;
 }

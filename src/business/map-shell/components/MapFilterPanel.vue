@@ -9,7 +9,12 @@ import {
 	fetchAllYear,
 	normalizeLabelValueOptions
 } from '../../../api/statistics.js';
-import { createEmptyFilters } from '../utils/monitorFilters.js';
+import {
+	createEmptyFilters,
+	DISTANCE_SUBSTATION_RANGE_OPTIONS,
+	LINE_DISTANCE_SUBSTATION_RANGE_OPTIONS
+	// TASK_STATUS_OPTIONS // 任务状态改为顶部 tab 控制，面板暂不展示
+} from '../utils/monitorFilters.js';
 
 const AREA_OBJECT_TYPE_OPTIONS = [
 	{ value: 'color-steel', label: '彩钢瓦' },
@@ -32,24 +37,18 @@ const STATIC_FILTER_GROUPS = [
 		options: AREA_OBJECT_TYPE_OPTIONS
 	},
 	{
-		key: 'verifyStatus',
-		label: '核查状态',
+		key: 'distanceSubstationRange',
+		label: '异物距离',
 		multiple: false,
-		options: [
-			{ value: 'verified', label: '已核查' },
-			{ value: 'unverified', label: '未核查' }
-		]
-	},
-	{
-		key: 'disposeStatus',
-		label: '处置状态',
-		multiple: false,
-		options: [
-			{ value: 'disposed', label: '已处置' },
-			{ value: 'undisposed', label: '未处置' }
-			// { value: 'no-need', label: '无需处置' }
-		]
+		options: DISTANCE_SUBSTATION_RANGE_OPTIONS
 	}
+	// 任务状态由顶部 tab 控制（待核查=0，待处置=2），面板不再展示选择
+	// {
+	// 	key: 'taskStatus',
+	// 	label: '任务状态',
+	// 	multiple: false,
+	// 	options: TASK_STATUS_OPTIONS
+	// }
 ];
 
 const props = defineProps({
@@ -73,14 +72,25 @@ const periodLoading = ref(false);
 
 const filterGroups = computed(() =>
 	STATIC_FILTER_GROUPS.map((group) => {
-		if (group.key !== 'objectType') {
-			return group;
+		if (group.key === 'objectType') {
+			return {
+				...group,
+				options:
+					props.monitorType === 'line' ? LINE_OBJECT_TYPE_OPTIONS : AREA_OBJECT_TYPE_OPTIONS
+			};
 		}
 
-		return {
-			...group,
-			options: props.monitorType === 'line' ? LINE_OBJECT_TYPE_OPTIONS : AREA_OBJECT_TYPE_OPTIONS
-		};
+		if (group.key === 'distanceSubstationRange') {
+			return {
+				...group,
+				options:
+					props.monitorType === 'line'
+						? LINE_DISTANCE_SUBSTATION_RANGE_OPTIONS
+						: DISTANCE_SUBSTATION_RANGE_OPTIONS
+			};
+		}
+
+		return group;
 	})
 );
 
@@ -95,8 +105,8 @@ const cloneFilters = (value) => ({
 	year: value?.year ?? '',
 	period: value?.period ?? '',
 	objectType: normalizeObjectType(value?.objectType),
-	verifyStatus: value?.verifyStatus ?? '',
-	disposeStatus: value?.disposeStatus ?? ''
+	taskStatus: value?.taskStatus ?? '',
+	distanceSubstationRange: value?.distanceSubstationRange ?? ''
 });
 
 const syncDraftFromModel = () => {
@@ -105,8 +115,8 @@ const syncDraftFromModel = () => {
 	draft.year = next.year;
 	draft.period = next.period;
 	draft.objectType = next.objectType;
-	draft.verifyStatus = next.verifyStatus;
-	draft.disposeStatus = next.disposeStatus;
+	draft.taskStatus = next.taskStatus;
+	draft.distanceSubstationRange = next.distanceSubstationRange;
 
 	if (yearChanged) {
 		loadPeriodOptions(next.year);
@@ -208,11 +218,14 @@ const toggleOption = (group, option) => {
 
 const handleReset = () => {
 	const empty = createEmptyFilters();
+	const keepTaskStatus = draft.taskStatus;
 	draft.year = empty.year;
 	draft.period = empty.period;
 	draft.objectType = empty.objectType;
-	draft.verifyStatus = empty.verifyStatus;
-	draft.disposeStatus = empty.disposeStatus;
+	draft.distanceSubstationRange = empty.distanceSubstationRange;
+	// 任务状态随顶部 tab，重置面板时保留，避免被清空
+	// draft.taskStatus = empty.taskStatus;
+	draft.taskStatus = keepTaskStatus;
 	periodOptions.value = [];
 	emit('reset', cloneFilters(draft));
 };

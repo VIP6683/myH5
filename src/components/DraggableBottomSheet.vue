@@ -122,6 +122,8 @@ const isFullyExpanded = computed(() =>
 	props.persistent ? snap.value === 'expanded' : expanded.value
 );
 
+const showHandleArrowAnim = computed(() => !isDragging.value);
+
 const rootStyle = computed(() => ({
 	zIndex: props.zIndex
 }));
@@ -376,11 +378,31 @@ onBeforeUnmount(() => {
 				<div
 					ref="handleRef"
 					class="draggable-bottom-sheet__handle-wrap"
+					:class="{
+						'is-arrow-animating': showHandleArrowAnim,
+						'is-arrow-down': isFullyExpanded
+					}"
 					data-bottom-sheet-handle
 					@pointerdown="onHandlePointerDown"
 					@click="onHandleClick"
 				>
 					<span class="draggable-bottom-sheet__handle" aria-hidden="true" />
+					<svg
+						class="draggable-bottom-sheet__handle-arrow"
+						width="16"
+						height="10"
+						viewBox="0 0 16 10"
+						aria-hidden="true"
+					>
+						<path
+							fill="none"
+							stroke="currentColor"
+							stroke-width="1.5"
+							stroke-linecap="round"
+							stroke-linejoin="round"
+							:d="isFullyExpanded ? 'M2 2 L8 8 L14 2' : 'M2 8 L8 2 L14 8'"
+						/>
+					</svg>
 				</div>
 
 				<header v-if="$slots.header" ref="headerRef" class="draggable-bottom-sheet__header">
@@ -498,7 +520,7 @@ onBeforeUnmount(() => {
 		}
 
 		.draggable-bottom-sheet__handle-wrap {
-			padding: 8px 0;
+			padding: 6px 0 2px;
 		}
 	}
 }
@@ -518,15 +540,25 @@ onBeforeUnmount(() => {
 
 .draggable-bottom-sheet__handle-wrap {
 	display: flex;
+	flex-direction: column;
 	align-items: center;
 	justify-content: center;
+	gap: 4px;
 	flex-shrink: 0;
-	padding: 10px 0 4px;
+	padding: 8px 0 4px;
 	cursor: grab;
 	touch-action: none;
 
 	&:active {
 		cursor: grabbing;
+	}
+
+	&.is-arrow-animating .draggable-bottom-sheet__handle-arrow {
+		animation: draggable-bottom-sheet-handle-bounce-up 1.4s ease-in-out infinite;
+	}
+
+	&.is-arrow-animating.is-arrow-down .draggable-bottom-sheet__handle-arrow {
+		animation-name: draggable-bottom-sheet-handle-bounce-down;
 	}
 }
 
@@ -543,6 +575,49 @@ onBeforeUnmount(() => {
 
 .draggable-bottom-sheet__panel--dark .draggable-bottom-sheet__handle {
 	background: rgba(255, 255, 255, 0.63);
+}
+
+.draggable-bottom-sheet__handle-arrow {
+	display: block;
+	flex-shrink: 0;
+	color: rgba(255, 255, 255, 0.55);
+}
+
+.draggable-bottom-sheet__panel--light .draggable-bottom-sheet__handle-arrow {
+	color: rgba(0, 0, 0, 0.35);
+}
+
+@keyframes draggable-bottom-sheet-handle-bounce-up {
+	0%,
+	100% {
+		transform: translateY(0);
+		opacity: 0.55;
+	}
+
+	50% {
+		transform: translateY(-4px);
+		opacity: 0.9;
+	}
+}
+
+@keyframes draggable-bottom-sheet-handle-bounce-down {
+	0%,
+	100% {
+		transform: translateY(0);
+		opacity: 0.55;
+	}
+
+	50% {
+		transform: translateY(4px);
+		opacity: 0.9;
+	}
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.draggable-bottom-sheet__handle-wrap.is-arrow-animating .draggable-bottom-sheet__handle-arrow {
+		animation: none;
+		opacity: 0.7;
+	}
 }
 
 .draggable-bottom-sheet__header {

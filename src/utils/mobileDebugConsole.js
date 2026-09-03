@@ -17,10 +17,15 @@ function hideDefaultSwitch() {
 
 /**
  * 是否展示移动端调试按钮。
+ * - AppConfig.mobileDebug === true 强制开启（部署后改 config 即可，无需重打包）
  * - 开发环境默认开启
  * - 访问地址带 ?debug=1 开启（写入 sessionStorage，刷新仍有效）
  */
 export function isMobileDebugEnabled() {
+	if (typeof window !== 'undefined' && window.AppConfig?.mobileDebug === true) {
+		return true;
+	}
+
 	if (import.meta.env.DEV) {
 		return true;
 	}

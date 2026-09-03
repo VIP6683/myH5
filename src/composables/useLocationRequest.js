@@ -81,8 +81,14 @@ export function useLocationRequest(handlers = {}) {
 		}
 	};
 
-	/** 直接调起系统/微信定位授权，返回 Promise<{ lng, lat }> */
-	const requestLocation = () => {
+	/**
+	 * 直接调起系统/微信定位授权，返回 Promise<{ lng, lat }>
+	 * @param {{ needOrientation?: boolean }} [options]
+	 * needOrientation：仅地图定位箭头需要；拍照水印等只要经纬度，勿申请指南针以免误弹提示
+	 */
+	const requestLocation = (options = {}) => {
+		const needOrientation = options.needOrientation === true;
+
 		return new Promise(async (resolve, reject) => {
 			pendingResolve = resolve;
 			pendingReject = reject;
@@ -91,6 +97,7 @@ export function useLocationRequest(handlers = {}) {
 				provider: getLocationProvider(),
 				secureContext: canUseNativeGeolocation(),
 				isWeChat: isWeChatEnv(),
+				needOrientation,
 				href: typeof window !== 'undefined' ? window.location.href : ''
 			});
 
@@ -113,11 +120,10 @@ export function useLocationRequest(handlers = {}) {
 				return;
 			}
 
-			// iOS 13+ 必须在用户点击的同步调用链里申请陀螺仪权限，不能等定位完成后再申请
-			const orientationGranted = await ensureDeviceOrientationPermission();
-			logMobileDebug('orientation:permission', { granted: orientationGranted });
-			if (!orientationGranted) {
-				openDialog('orientationDenied');
+			// iOS 13+ 指南针须在用户点击同步链里申请；仅地图定位箭头需要，失败不阻断定位
+			if (needOrientation) {
+				const orientationGranted = await ensureDeviceOrientationPermission();
+				logMobileDebug('orientation:permission', { granted: orientationGranted });
 			}
 
 			await fetchLocation();

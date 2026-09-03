@@ -15,6 +15,7 @@ import {
 } from '../config/mapSceneConfig.js';
 import { MapEventType, emitMapEvent } from '../../core/mapEvents.js';
 import { getMapTokens } from '../../config/runtimeConfig.js';
+import { transformLngLatFromLocation } from '../../../utils/mapCoordTransform.js';
 import { stopMyPositionMarker, upsertMyPositionMarker } from './myPositionMarker.js';
 import { addProvinceMaskLayer, clearProvinceMaskLayer } from './provinceMaskLayer.js';
 import { clearMosaicWmtsLayer, ensureMosaicWmtsLayer } from './mosaicWmtsLayer.js';
@@ -809,8 +810,10 @@ export async function locateMyPosition(options = {}) {
 	const map = options.map || mapInstance;
 	if (!map) throw new Error('Map instance is not ready.');
 
-	let { lng, lat, alt } = options;
-	if (lng == null || lat == null) {
+	let { lng, lat, alt, coordinateType = 'wgs84' } = options;
+	if (lng != null && lat != null) {
+		[lng, lat] = transformLngLatFromLocation(lng, lat, map, coordinateType);
+	} else if (lng == null || lat == null) {
 		if (!navigator?.geolocation) throw new Error('当前浏览器不支持定位');
 		const position = await new Promise((resolve, reject) => {
 			navigator.geolocation.getCurrentPosition(resolve, reject, {

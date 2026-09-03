@@ -1,18 +1,26 @@
 <script setup>
 import { computed, inject, onBeforeUnmount, reactive, ref, watch } from 'vue';
 import DraggableBottomSheet from '../../../components/DraggableBottomSheet.vue';
+import LocationPermissionDialog from '../../../components/location/LocationPermissionDialog.vue';
+import OptionPickerSheet from '../../../components/OptionPickerSheet.vue';
 import NavMapActionSheet from '../../nav-demo/components/NavMapActionSheet.vue';
+import { useLocationRequest } from '../../../composables/useLocationRequest.js';
 import { MAP_UI_OVERLAY_KEY } from '../composables/useMapUiOverlay.js';
 import { addPhotoWatermark } from '../utils/addPhotoWatermark.js';
 import { calcDistanceMeters, formatDistanceText } from '../utils/calcGeoDistance.js';
 import { reverseGeocode } from '../utils/tiandituGeocoder.js';
-import { getCurrentLocation } from '../../../utils/locationPermission.js';
 import {
+	fetchAbnormalCorrectTypeOptions,
+	fetchCorrectStatusOptions
+} from '../../../api/dict.js';
+import {
+	correctAbnormalTask,
 	parseAbnormalPhotoUrls,
 	saveAbnormalMonitorAdditionalInfo,
 	uploadAbnormalSurfacePhotoUrls
 } from '../../../api/statistics.js';
 import { getUserProfile } from '../../../utils/auth.js';
+import { logMobileDebug, logMobileDebugError } from '../../../utils/mobileDebugConsole.js';
 
 const visible = defineModel('visible', { type: Boolean, default: false });
 
@@ -23,9 +31,17 @@ const props = defineProps({
 	}
 });
 
-const emit = defineEmits(['submit', 'success', 'close', 'back']);
+const emit = defineEmits(['submit', 'success', 'correct-success', 'close', 'back']);
 
 const mapUiOverlay = inject(MAP_UI_OVERLAY_KEY, null);
+
+const {
+	dialogVisible: locationDialogVisible,
+	dialogMode: locationDialogMode,
+	dialogErrorMessage: locationDialogMessage,
+	requestLocation,
+	onDialogConfirm: onLocationDialogConfirm
+} = useLocationRequest();
 
 const navSheetVisible = ref(false);
 const verifyPhotoInputRef = ref(null);
@@ -38,32 +54,99 @@ const disposePhotoProcessing = ref(false);
 const disposePhotos = ref([]);
 const disposePhotoTip = ref('');
 
+/** 核查/处置照片各自最多 5 张 */
+const MAX_PHOTO_COUNT = 5;
+
 const photoPreviewIndex = ref(-1);
 const photoPreviewOpen = ref(false);
 const photoPreviewGroup = ref('verify'); // 'verify' | 'dispose'
 const submitting = ref(false);
 const submitTip = ref('');
 
+/** 改正（独立于核查/处置提交流程） */
+const CORRECT_OTHER_LABEL = '其他';
+const correctTypeOptions = ref([]);
+const correctTypeLoading = ref(false);
+const correctTypePickerVisible = ref(false);
+const correcting = ref(false);
+const correctTip = ref('');
+const createDefaultCorrectForm = () => ({
+	correctAbnormalType: '',
+	correctRemark: ''
+});
+const correctForm = reactive(createDefaultCorrectForm());
+
+/** 处置时的核查状态（字典 correct_staus） */
+const correctStatusOptions = ref([]);
+const correctStatusLoading = ref(false);
+const correctStatusPickerVisible = ref(false);
+
 const createDefaultForm = () => ({
 	includeInLedger: true,
 	isVerified: true,
 	opinion: '',
-	remarks: ''
+	remarks: '',
+	correctStatus: ''
 });
 
 const form = reactive(createDefaultForm());
 
 const additionalInfo = computed(() => props.detail?.additionalInfo);
 
-const isCheckReadonly = computed(() => Number(additionalInfo.value?.checkStatus) === 1);
+/** 有核查照片 = 已核查（核查时必传 checkPhotos） */
+const hasCheckPhotos = computed(
+	() => parseAbnormalPhotoUrls(additionalInfo.value?.checkPhotos).length > 0
+);
 
-const isDisposeReadonly = computed(() => Number(additionalInfo.value?.disposalStatus) === 1);
+/** 有处置照片 = 已处置（处置时必传 disposalPhotos） */
+const hasDisposalPhotos = computed(
+	() => parseAbnormalPhotoUrls(additionalInfo.value?.disposalPhotos).length > 0
+);
+
+const isCheckReadonly = computed(() => hasCheckPhotos.value);
+
+const isDisposeReadonly = computed(() => hasDisposalPhotos.value);
+
+const disposalStatusLabel = computed(() => (hasDisposalPhotos.value ? '已处置' : ''));
 
 const showDisposeSection = computed(() => isCheckReadonly.value || form.isVerified);
 
 const canSubmit = computed(() => !isCheckReadonly.value || !isDisposeReadonly.value);
 
-const sheetTitle = computed(() => (isCheckReadonly.value ? '核查信息（已核查）' : '核查信息'));
+const requiresDisposalPhotos = computed(
+	() => isCheckReadonly.value && !hasDisposalPhotos.value
+);
+
+const sheetTitle = computed(() => '核查信息');
+
+const selectedCorrectTypeOption = computed(() =>
+	correctTypeOptions.value.find(
+		(item) => String(item.value) === String(correctForm.correctAbnormalType)
+	)
+);
+
+const correctTypeLabel = computed(() => selectedCorrectTypeOption.value?.label || '');
+
+const hasCorrectType = computed(
+	() => String(correctForm.correctAbnormalType ?? '').trim() !== ''
+);
+
+const isOtherCorrectType = computed(
+	() => String(correctTypeLabel.value).trim() === CORRECT_OTHER_LABEL
+);
+
+const selectedCorrectStatusOption = computed(() =>
+	correctStatusOptions.value.find(
+		(item) => String(item.value) === String(form.correctStatus)
+	)
+);
+
+const correctStatusLabel = computed(() => selectedCorrectStatusOption.value?.label || '');
+
+/** 处置时可填核查状态：继续处置，或首次核查勾选「是否处置」 */
+const showCorrectStatusField = computed(
+	() => isCheckReadonly.value || form.isVerified
+);
 
 const submitButtonLabel = computed(() => {
 	if (submitting.value) {
@@ -98,28 +181,74 @@ const infoRows = computed(() => {
 		return [];
 	}
 
-	const coordinates = detail.coordinates;
-	const lng = coordinates?.lng ?? detail.lng;
-	const lat = coordinates?.lat ?? detail.lat;
-	const coordinateText =
-		lng !== undefined &&
-		lng !== null &&
-		lng !== '' &&
-		lat !== undefined &&
-		lat !== null &&
-		lat !== ''
-			? `${lng}, ${lat}`
-			: '';
+	// 暂隐藏经纬度展示，需要时恢复下方代码
+	// const coordinates = detail.coordinates;
+	// const lng = coordinates?.lng ?? detail.lng;
+	// const lat = coordinates?.lat ?? detail.lat;
+	// const coordinateText =
+	// 	lng !== undefined &&
+	// 	lng !== null &&
+	// 	lng !== '' &&
+	// 	lat !== undefined &&
+	// 	lat !== null &&
+	// 	lat !== ''
+	// 		? `${lng}, ${lat}`
+	// 		: '';
 
 	return [
 		{ label: '图斑编号', value: detail.patchNo || detail.objectNo },
 		...(detail.kind === 'line' ? [{ label: '线路名称', value: detail.lineName }] : []),
 		{ label: '所属变电站', value: detail.substationName },
 		{ label: '核查人', value: inspectorName.value },
-		{ label: '核查时间', value: verifyTime.value },
-		{ label: '坐标', value: coordinateText }
+		{ label: '核查时间', value: verifyTime.value }
+		// { label: '坐标', value: coordinateText }
 	].filter((row) => row.value);
 });
+
+const navDestinationName = ref('目的地');
+
+const resolveNavDestinationName = async (lng, lat) => {
+	try {
+		const address = await reverseGeocode(Number(lng), Number(lat));
+		navDestinationName.value = address?.trim() || '目的地';
+	} catch (error) {
+		console.warn('[MapVerify] nav reverse geocode failed', error);
+		navDestinationName.value = '目的地';
+	}
+};
+
+watch(
+	() => {
+		const detail = props.detail;
+		if (!detail) {
+			return null;
+		}
+
+		const coordinates = detail.coordinates;
+		const lng = coordinates?.lng ?? detail.lng;
+		const lat = coordinates?.lat ?? detail.lat;
+		if (
+			lng === undefined ||
+			lng === null ||
+			lng === '' ||
+			lat === undefined ||
+			lat === null ||
+			lat === ''
+		) {
+			return null;
+		}
+
+		return { lng: Number(lng), lat: Number(lat) };
+	},
+	(coords) => {
+		if (!coords) {
+			navDestinationName.value = '目的地';
+			return;
+		}
+		resolveNavDestinationName(coords.lng, coords.lat);
+	},
+	{ immediate: true }
+);
 
 const navPoi = computed(() => {
 	const detail = props.detail;
@@ -144,7 +273,7 @@ const navPoi = computed(() => {
 	return {
 		lng: Number(lng),
 		lat: Number(lat),
-		name: detail.substationName || detail.objectNo || '核查位置'
+		name: navDestinationName.value
 	};
 });
 
@@ -197,8 +326,13 @@ const populateFormFromAdditionalInfo = () => {
 	if (info.isAccounted !== undefined && info.isAccounted !== null) {
 		form.includeInLedger = Number(info.isAccounted) === 1;
 	}
+	form.isVerified = parseAbnormalPhotoUrls(info.disposalPhotos).length > 0 || !hasCheckPhotos.value;
 	form.opinion = info.checkOpinion || '';
 	form.remarks = info.checkRemark || '';
+	form.correctStatus =
+		info.correctStatus !== undefined && info.correctStatus !== null && info.correctStatus !== ''
+			? String(info.correctStatus)
+			: '';
 
 	const checkPhotos = parseAbnormalPhotoUrls(info.checkPhotos);
 	verifyPhotos.value = checkPhotos.map((url, index) => createRemotePhotoItem(url, index));
@@ -244,11 +378,20 @@ const resetForm = () => {
 		disposePhotos.value.forEach(revokePhotoItem);
 		disposePhotos.value = [];
 		disposePhotoTip.value = '';
+		correctStatusPickerVisible.value = false;
 		if (disposePhotoInputRef.value) {
 			disposePhotoInputRef.value.value = '';
 		}
 
-		const disposalPhotos = parseAbnormalPhotoUrls(additionalInfo.value?.disposalPhotos);
+		const info = additionalInfo.value;
+		form.correctStatus =
+			info?.correctStatus !== undefined &&
+			info?.correctStatus !== null &&
+			info?.correctStatus !== ''
+				? String(info.correctStatus)
+				: '';
+
+		const disposalPhotos = parseAbnormalPhotoUrls(info?.disposalPhotos);
 		disposePhotos.value = disposalPhotos.map((url, index) => ({
 			...createRemotePhotoItem(url, index),
 			name: `处置照片 ${index + 1}`
@@ -257,6 +400,7 @@ const resetForm = () => {
 	}
 
 	Object.assign(form, createDefaultForm());
+	correctStatusPickerVisible.value = false;
 	revokeAllPhotos();
 	if (verifyPhotoInputRef.value) {
 		verifyPhotoInputRef.value.value = '';
@@ -266,37 +410,36 @@ const resetForm = () => {
 	}
 };
 
+/** 水印定位必须用用户真实位置；未授权时走与首页相同的定位弹框，绝不回退图斑坐标 */
 const getWatermarkOptions = async () => {
 	const patchNo = props.detail?.patchNo || props.detail?.objectNo || '未知';
 	const patchCoords = props.detail?.coordinates;
-	let lng = patchCoords?.lng ?? '';
-	let lat = patchCoords?.lat ?? '';
-	let address = '';
-	let distance = patchCoords?.lng != null && patchCoords?.lat != null ? '0m（图斑中心）' : '未知';
 
-	try {
-		const current = await getCurrentLocation();
-		lng = Number(current.lng.toFixed(6));
-		lat = Number(current.lat.toFixed(6));
-
-		if (patchCoords?.lng != null && patchCoords?.lat != null) {
-			distance = formatDistanceText(
-				calcDistanceMeters(
-					{ lng: current.lng, lat: current.lat },
-					{ lng: patchCoords.lng, lat: patchCoords.lat }
-				)
-			);
-		}
-	} catch (error) {
-		console.warn('[MapVerify] get current location failed', error);
+	const current = await requestLocation();
+	const lngNum = Number(current?.lng);
+	const latNum = Number(current?.lat);
+	if (!current || !Number.isFinite(lngNum) || !Number.isFinite(latNum)) {
+		throw new Error('location_required');
 	}
 
-	if (lng !== '' && lat !== '') {
-		try {
-			address = await reverseGeocode(Number(lng), Number(lat));
-		} catch (error) {
-			console.warn('[MapVerify] reverse geocode failed', error);
-		}
+	const lng = Number(lngNum.toFixed(6));
+	const lat = Number(latNum.toFixed(6));
+
+	let distance = '未知';
+	if (patchCoords?.lng != null && patchCoords?.lat != null) {
+		distance = formatDistanceText(
+			calcDistanceMeters(
+				{ lng: lngNum, lat: latNum },
+				{ lng: patchCoords.lng, lat: patchCoords.lat }
+			)
+		);
+	}
+
+	let address = '';
+	try {
+		address = await reverseGeocode(lng, lat);
+	} catch (error) {
+		console.warn('[MapVerify] reverse geocode failed', error);
 	}
 
 	return {
@@ -316,15 +459,52 @@ const onVerifyPhotoChange = async (event) => {
 		return;
 	}
 
+	const remaining = MAX_PHOTO_COUNT - verifyPhotos.value.length;
+	if (remaining <= 0) {
+		verifyPhotoTip.value = `最多拍摄 ${MAX_PHOTO_COUNT} 张核查照片`;
+		if (verifyPhotoInputRef.value) {
+			verifyPhotoInputRef.value.value = '';
+		}
+		return;
+	}
+
+	const selected = files.slice(0, remaining);
 	verifyPhotoProcessing.value = true;
 	try {
-		for (const file of files) {
-			const watermarkedFile = await addPhotoWatermark(file, await getWatermarkOptions());
+		logMobileDebug('MapVerify.photo', {
+			group: 'verify',
+			count: selected.length,
+			files: selected.map((f) => ({
+				name: f.name,
+				type: f.type,
+				size: f.size,
+				lastModified: f.lastModified
+			}))
+		});
+		const watermarkOptions = await getWatermarkOptions();
+		for (const file of selected) {
+			const watermarkedFile = await addPhotoWatermark(file, {
+				...watermarkOptions,
+				shotTime: new Date()
+			});
+			logMobileDebug('MapVerify.photo.ok', {
+				group: 'verify',
+				outName: watermarkedFile.name,
+				outType: watermarkedFile.type,
+				outSize: watermarkedFile.size
+			});
 			verifyPhotos.value.push(createPhotoItem(watermarkedFile));
 		}
-		verifyPhotoTip.value = '';
+		verifyPhotoTip.value =
+			files.length > remaining ? `最多拍摄 ${MAX_PHOTO_COUNT} 张核查照片` : '';
 	} catch (error) {
+		logMobileDebugError('MapVerify.photo', error, { group: 'verify' });
 		console.error('[MapVerify] photo watermark failed', error);
+		if (error?.message === 'location_required' || error?.code === 1) {
+			verifyPhotoTip.value = '请先授权定位后再拍照';
+		} else {
+			verifyPhotoTip.value = `拍照处理失败：${error?.message || '未知错误'}`;
+		}
 	} finally {
 		if (verifyPhotoInputRef.value) {
 			verifyPhotoInputRef.value.value = '';
@@ -339,15 +519,52 @@ const onDisposePhotoChange = async (event) => {
 		return;
 	}
 
+	const remaining = MAX_PHOTO_COUNT - disposePhotos.value.length;
+	if (remaining <= 0) {
+		disposePhotoTip.value = `最多拍摄 ${MAX_PHOTO_COUNT} 张处置照片`;
+		if (disposePhotoInputRef.value) {
+			disposePhotoInputRef.value.value = '';
+		}
+		return;
+	}
+
+	const selected = files.slice(0, remaining);
 	disposePhotoProcessing.value = true;
 	try {
-		for (const file of files) {
-			const watermarkedFile = await addPhotoWatermark(file, await getWatermarkOptions());
+		logMobileDebug('MapVerify.photo', {
+			group: 'dispose',
+			count: selected.length,
+			files: selected.map((f) => ({
+				name: f.name,
+				type: f.type,
+				size: f.size,
+				lastModified: f.lastModified
+			}))
+		});
+		const watermarkOptions = await getWatermarkOptions();
+		for (const file of selected) {
+			const watermarkedFile = await addPhotoWatermark(file, {
+				...watermarkOptions,
+				shotTime: new Date()
+			});
+			logMobileDebug('MapVerify.photo.ok', {
+				group: 'dispose',
+				outName: watermarkedFile.name,
+				outType: watermarkedFile.type,
+				outSize: watermarkedFile.size
+			});
 			disposePhotos.value.push(createPhotoItem(watermarkedFile));
 		}
-		disposePhotoTip.value = '';
+		disposePhotoTip.value =
+			files.length > remaining ? `最多拍摄 ${MAX_PHOTO_COUNT} 张处置照片` : '';
 	} catch (error) {
+		logMobileDebugError('MapVerify.photo', error, { group: 'dispose' });
 		console.error('[MapVerify] photo watermark failed', error);
+		if (error?.message === 'location_required' || error?.code === 1) {
+			disposePhotoTip.value = '请先授权定位后再拍照';
+		} else {
+			disposePhotoTip.value = `拍照处理失败：${error?.message || '未知错误'}`;
+		}
 	} finally {
 		if (disposePhotoInputRef.value) {
 			disposePhotoInputRef.value.value = '';
@@ -403,6 +620,131 @@ const openNavigation = () => {
 	navSheetVisible.value = true;
 };
 
+const resetCorrectForm = () => {
+	Object.assign(correctForm, createDefaultCorrectForm());
+	correctTip.value = '';
+	correctTypePickerVisible.value = false;
+};
+
+const loadCorrectTypeOptions = async () => {
+	if (correctTypeLoading.value) {
+		return;
+	}
+	correctTypeLoading.value = true;
+	try {
+		correctTypeOptions.value = await fetchAbnormalCorrectTypeOptions();
+	} catch (error) {
+		console.error('[MapVerify] load correct type options failed', error);
+		correctTypeOptions.value = [];
+		correctTip.value = error?.message || '改正类型加载失败';
+	} finally {
+		correctTypeLoading.value = false;
+	}
+};
+
+const openCorrectTypePicker = () => {
+	if (correcting.value || correctTypeLoading.value) {
+		return;
+	}
+	if (!correctTypeOptions.value.length) {
+		loadCorrectTypeOptions().then(() => {
+			if (correctTypeOptions.value.length) {
+				correctTypePickerVisible.value = true;
+			}
+		});
+		return;
+	}
+	correctTypePickerVisible.value = true;
+};
+
+const onCorrectTypeSelect = (option) => {
+	correctTip.value = '';
+	if (String(option?.label || '').trim() !== CORRECT_OTHER_LABEL) {
+		correctForm.correctRemark = '';
+	}
+};
+
+const clearCorrectType = () => {
+	if (correcting.value) {
+		return;
+	}
+	correctForm.correctAbnormalType = '';
+	correctForm.correctRemark = '';
+	correctTip.value = '';
+};
+
+const loadCorrectStatusOptions = async () => {
+	if (correctStatusLoading.value) {
+		return;
+	}
+	correctStatusLoading.value = true;
+	try {
+		correctStatusOptions.value = await fetchCorrectStatusOptions();
+	} catch (error) {
+		console.error('[MapVerify] load correct status options failed', error);
+		correctStatusOptions.value = [];
+		submitTip.value = error?.message || '核查状态加载失败';
+	} finally {
+		correctStatusLoading.value = false;
+	}
+};
+
+const openCorrectStatusPicker = () => {
+	if (isDisposeReadonly.value || submitting.value || correctStatusLoading.value) {
+		return;
+	}
+	if (!correctStatusOptions.value.length) {
+		loadCorrectStatusOptions().then(() => {
+			if (correctStatusOptions.value.length) {
+				correctStatusPickerVisible.value = true;
+			}
+		});
+		return;
+	}
+	correctStatusPickerVisible.value = true;
+};
+
+const onCorrect = async () => {
+	if (correcting.value) {
+		return;
+	}
+
+	correctTip.value = '';
+
+	const taskId = props.detail?.additionalInfoId;
+	if (taskId === undefined || taskId === null || taskId === '') {
+		correctTip.value = '缺少任务信息，无法改正';
+		return;
+	}
+
+	const correctAbnormalType = String(correctForm.correctAbnormalType || '').trim();
+	const correctRemark = String(correctForm.correctRemark || '').trim();
+	if (isOtherCorrectType.value && !correctRemark) {
+		correctTip.value = '选择「其他」时请填写改正备注';
+		return;
+	}
+
+	correcting.value = true;
+	try {
+		await correctAbnormalTask(taskId, {
+			correctAbnormalType,
+			correctRemark
+		});
+		resetCorrectForm();
+		emit('correct-success', {
+			successMessage: '改正成功',
+			detailId: props.detail?.id,
+			kind: props.detail?.kind,
+			taskId
+		});
+	} catch (error) {
+		console.error('[MapVerify] correct failed', error);
+		correctTip.value = error?.message || '改正失败，请稍后重试';
+	} finally {
+		correcting.value = false;
+	}
+};
+
 const onSubmit = async () => {
 	if (submitting.value || !canSubmit.value) {
 		return;
@@ -427,18 +769,16 @@ const onSubmit = async () => {
 	const uploadQuery = { id: surfaceId };
 	const info = additionalInfo.value;
 
-	if (isCheckReadonly.value) {
-		if (!disposePhotos.value.length) {
-			disposePhotoTip.value = '请至少拍摄一张处置照片';
-			return;
-		}
-	} else {
+	if (!isCheckReadonly.value) {
 		if (!verifyPhotos.value.length) {
 			verifyPhotoTip.value = '请至少拍摄一张核查照片';
 			return;
 		}
+	}
 
-		if (form.isVerified && !disposePhotos.value.length) {
+	if (isCheckReadonly.value && requiresDisposalPhotos.value) {
+		const hasDisposalPhoto = disposePhotos.value.some((item) => item.file || item.url);
+		if (!hasDisposalPhoto) {
 			disposePhotoTip.value = '请至少拍摄一张处置照片';
 			return;
 		}
@@ -449,15 +789,25 @@ const onSubmit = async () => {
 		let payload;
 		let checkPhotoUrls = [];
 		let disposalPhotoUrls = [];
+		const correctStatusRaw = String(form.correctStatus ?? '').trim();
+		const correctStatusPayload =
+			correctStatusRaw !== '' && !Number.isNaN(Number(correctStatusRaw))
+				? { correctStatus: Number(correctStatusRaw) }
+				: {};
 
 		if (isCheckReadonly.value) {
 			disposalPhotoUrls = await resolvePhotoUrls(disposePhotos.value, uploadQuery);
+			if (!disposalPhotoUrls.length) {
+				disposePhotoTip.value = '请至少拍摄一张处置照片';
+				return;
+			}
 			payload = {
 				id: additionalInfoId,
 				isAccounted: info?.isAccounted ?? 0,
 				checkStatus: 1,
-				checkType: info?.checkType ?? 0,
+				checkType: info?.checkType ?? 1,
 				disposalStatus: 1,
+				...correctStatusPayload,
 				checkOpinion: info?.checkOpinion || '',
 				checkRemark: info?.checkRemark || '',
 				checkPhotos: info?.checkPhotos || JSON.stringify([]),
@@ -468,17 +818,17 @@ const onSubmit = async () => {
 			disposalPhotoUrls = form.isVerified
 				? await resolvePhotoUrls(disposePhotos.value, uploadQuery)
 				: [];
-
 			payload = {
 				id: additionalInfoId,
 				isAccounted: form.includeInLedger ? 1 : 0,
 				checkStatus: 1,
-				checkType: 0,
+				checkType: 1,
 				disposalStatus: form.isVerified ? 1 : 0,
 				checkOpinion: form.opinion?.trim() || '',
 				checkRemark: form.remarks?.trim() || '',
 				checkPhotos: JSON.stringify(checkPhotoUrls),
-				...(form.isVerified ? { disposalPhotos: JSON.stringify(disposalPhotoUrls) } : {})
+				disposalPhotos: JSON.stringify(disposalPhotoUrls),
+				...(form.isVerified ? correctStatusPayload : {})
 			};
 		}
 
@@ -501,7 +851,9 @@ const onSubmit = async () => {
 		const successMessage = isCheckReadonly.value
 			? '处置信息提交成功'
 			: form.isVerified
-				? '核查处置信息提交成功'
+				? disposalPhotoUrls.length
+					? '核查处置信息提交成功'
+					: '核查信息提交成功'
 				: '核查信息提交成功';
 
 		emit('submit', submitPayload);
@@ -524,6 +876,9 @@ watch(visible, (open) => {
 	if (open) {
 		resetForm();
 		populateFormFromAdditionalInfo();
+		resetCorrectForm();
+		loadCorrectTypeOptions();
+		loadCorrectStatusOptions();
 		mapUiOverlay?.enterOverlay();
 	}
 });
@@ -533,6 +888,8 @@ watch(
 	(isVerified) => {
 		if (!isVerified) {
 			disposePhotoTip.value = '';
+			form.correctStatus = '';
+			correctStatusPickerVisible.value = false;
 		}
 	}
 );
@@ -649,7 +1006,10 @@ onBeforeUnmount(() => {
 							<label
 								v-if="!isCheckReadonly"
 								class="map-verify-form-sheet__photo-btn"
-								:class="{ 'is-disabled': verifyPhotoProcessing }"
+								:class="{
+									'is-disabled':
+										verifyPhotoProcessing || verifyPhotos.length >= MAX_PHOTO_COUNT
+								}"
 							>
 								<input
 									ref="verifyPhotoInputRef"
@@ -658,15 +1018,19 @@ onBeforeUnmount(() => {
 									accept="image/*"
 									capture="environment"
 									multiple
-									:disabled="verifyPhotoProcessing"
+									:disabled="
+										verifyPhotoProcessing || verifyPhotos.length >= MAX_PHOTO_COUNT
+									"
 									@change="onVerifyPhotoChange"
 								/>
 								{{
 									verifyPhotoProcessing
 										? '水印处理中...'
-										: verifyPhotos.length
-											? '继续拍照'
-											: '去拍照'
+										: verifyPhotos.length >= MAX_PHOTO_COUNT
+											? `已达上限(${MAX_PHOTO_COUNT})`
+											: verifyPhotos.length
+												? '继续拍照'
+												: '去拍照'
 								}}
 							</label>
 						</div>
@@ -726,6 +1090,94 @@ onBeforeUnmount(() => {
 						/>
 					</div>
 				</div>
+
+				<section class="map-verify-form-sheet__correct">
+					<div
+						class="map-verify-form-sheet__section-title map-verify-form-sheet__section-title--accent"
+					>
+						改正
+					</div>
+
+					<div class="map-verify-form-sheet__field map-verify-form-sheet__field--input">
+						<div class="map-verify-form-sheet__field-label-row">
+							<label class="map-verify-form-sheet__field-label">
+								改正类型
+							</label>
+							<button
+								v-if="hasCorrectType"
+								type="button"
+								class="map-verify-form-sheet__field-clear"
+								:disabled="correcting"
+								@click.stop="clearCorrectType"
+							>
+								清除
+							</button>
+						</div>
+						<button
+							type="button"
+							class="map-verify-form-sheet__select"
+							:disabled="correcting || correctTypeLoading"
+							@click="openCorrectTypePicker"
+						>
+							<span
+								class="map-verify-form-sheet__select-text"
+								:class="{ 'is-placeholder': !hasCorrectType }"
+							>
+								{{
+									correctTypeLoading
+										? '加载中...'
+										: correctTypeLabel || '请选择改正类型'
+								}}
+							</span>
+							<svg
+								class="map-verify-form-sheet__select-arrow"
+								viewBox="0 0 24 24"
+								fill="none"
+								aria-hidden="true"
+							>
+								<path
+									d="M6 9l6 6 6-6"
+									stroke="currentColor"
+									stroke-width="2"
+									stroke-linecap="round"
+									stroke-linejoin="round"
+								/>
+							</svg>
+						</button>
+					</div>
+
+					<div
+						v-if="isOtherCorrectType"
+						class="map-verify-form-sheet__field map-verify-form-sheet__field--input"
+					>
+						<label class="map-verify-form-sheet__field-label">
+							<span class="map-verify-form-sheet__required">*</span>
+							改正备注
+						</label>
+						<input
+							v-model="correctForm.correctRemark"
+							class="map-verify-form-sheet__input"
+							type="text"
+							placeholder="请填写改正备注"
+							:disabled="correcting"
+						/>
+					</div>
+
+					<p v-if="correctTip" class="map-verify-form-sheet__correct-tip">
+						{{ correctTip }}
+					</p>
+
+					<div class="map-verify-form-sheet__correct-actions">
+						<button
+							type="button"
+							class="map-verify-form-sheet__btn map-verify-form-sheet__btn--primary map-verify-form-sheet__btn--correct"
+							:disabled="correcting"
+							@click="onCorrect"
+						>
+							{{ correcting ? '提交中...' : '改正' }}
+						</button>
+					</div>
+				</section>
 			</section>
 
 			<div
@@ -733,26 +1185,66 @@ onBeforeUnmount(() => {
 				class="map-verify-form-sheet__section-title map-verify-form-sheet__section-title--accent map-verify-form-sheet__section-title--spaced"
 			>
 				处置信息
-				<span v-if="isDisposeReadonly" class="map-verify-form-sheet__status-badge">已处置</span>
+				<span v-if="isDisposeReadonly" class="map-verify-form-sheet__status-badge">{{
+					disposalStatusLabel
+				}}</span>
 			</div>
 			<section
 				v-if="showDisposeSection"
 				class="map-verify-form-sheet__dispose-card"
 				:class="{ 'is-readonly': isDisposeReadonly }"
 			>
-				<!-- <div class="map-verify-form-sheet__field">
-					<label class="map-verify-form-sheet__field-label">处置状态</label>
-					<span class="map-verify-form-sheet__status-text">待处置</span>
-				</div> -->
+				<div
+					v-if="showCorrectStatusField"
+					class="map-verify-form-sheet__field map-verify-form-sheet__field--input"
+				>
+					<label class="map-verify-form-sheet__field-label">
+						核查状态
+					</label>
+					<button
+						type="button"
+						class="map-verify-form-sheet__select"
+						:disabled="isDisposeReadonly || submitting || correctStatusLoading"
+						@click="openCorrectStatusPicker"
+					>
+						<span
+							class="map-verify-form-sheet__select-text"
+							:class="{ 'is-placeholder': !correctStatusLabel }"
+						>
+							{{
+								correctStatusLoading
+									? '加载中...'
+									: correctStatusLabel || '请选择核查状态'
+							}}
+						</span>
+						<svg
+							class="map-verify-form-sheet__select-arrow"
+							viewBox="0 0 24 24"
+							fill="none"
+							aria-hidden="true"
+						>
+							<path
+								d="M6 9l6 6 6-6"
+								stroke="currentColor"
+								stroke-width="2"
+								stroke-linecap="round"
+								stroke-linejoin="round"
+							/>
+						</svg>
+					</button>
+				</div>
 				<div class="map-verify-form-sheet__field">
 					<label class="map-verify-form-sheet__field-label">
-						<span class="map-verify-form-sheet__required">*</span>
+						<span v-if="requiresDisposalPhotos" class="map-verify-form-sheet__required">*</span>
 						处置拍照
 					</label>
 					<label
 						v-if="!isDisposeReadonly"
 						class="map-verify-form-sheet__photo-btn"
-						:class="{ 'is-disabled': disposePhotoProcessing }"
+						:class="{
+							'is-disabled':
+								disposePhotoProcessing || disposePhotos.length >= MAX_PHOTO_COUNT
+						}"
 					>
 						<input
 							ref="disposePhotoInputRef"
@@ -761,15 +1253,19 @@ onBeforeUnmount(() => {
 							accept="image/*"
 							capture="environment"
 							multiple
-							:disabled="disposePhotoProcessing"
+							:disabled="
+								disposePhotoProcessing || disposePhotos.length >= MAX_PHOTO_COUNT
+							"
 							@change="onDisposePhotoChange"
 						/>
 						{{
 							disposePhotoProcessing
 								? '水印处理中...'
-								: disposePhotos.length
-									? '继续拍照'
-									: '去拍照'
+								: disposePhotos.length >= MAX_PHOTO_COUNT
+									? `已达上限(${MAX_PHOTO_COUNT})`
+									: disposePhotos.length
+										? '继续拍照'
+										: '去拍照'
 						}}
 					</label>
 				</div>
@@ -835,6 +1331,30 @@ onBeforeUnmount(() => {
 	</DraggableBottomSheet>
 
 	<NavMapActionSheet v-model:visible="navSheetVisible" :poi="navPoi" />
+
+	<OptionPickerSheet
+		v-model:visible="correctTypePickerVisible"
+		v-model="correctForm.correctAbnormalType"
+		title="选择改正类型"
+		:options="correctTypeOptions"
+		clearable
+		@select="onCorrectTypeSelect"
+		@clear="clearCorrectType"
+	/>
+
+	<OptionPickerSheet
+		v-model:visible="correctStatusPickerVisible"
+		v-model="form.correctStatus"
+		title="选择核查状态"
+		:options="correctStatusOptions"
+	/>
+
+	<LocationPermissionDialog
+		v-model:visible="locationDialogVisible"
+		:mode="locationDialogMode"
+		:error-message="locationDialogMessage"
+		@confirm="onLocationDialogConfirm"
+	/>
 
 	<Teleport to="body">
 		<div
@@ -1015,6 +1535,101 @@ onBeforeUnmount(() => {
 
 .map-verify-form-sheet__form {
 	padding-bottom: 4px;
+}
+
+.map-verify-form-sheet__correct {
+	margin-top: 4px;
+	padding-top: 4px;
+	border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.map-verify-form-sheet__correct-tip {
+	margin: 0 0 8px;
+	padding: 0 2px;
+	font-size: 12px;
+	line-height: 1.4;
+	color: #ff7875;
+}
+
+.map-verify-form-sheet__correct-actions {
+	display: flex;
+	justify-content: center;
+	padding: 4px 0 10px;
+}
+
+.map-verify-form-sheet__select {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 8px;
+	width: 100%;
+	box-sizing: border-box;
+	padding: 7px 10px;
+	border: 0;
+	border-radius: 6px;
+	background: rgba(0, 0, 0, 0.22);
+	color: #fff;
+	font-size: 13px;
+	line-height: 1.3;
+	text-align: left;
+	cursor: pointer;
+	-webkit-tap-highlight-color: transparent;
+
+	&:disabled {
+		opacity: 0.65;
+		cursor: not-allowed;
+	}
+
+	&:active:not(:disabled) {
+		opacity: 0.92;
+	}
+}
+
+.map-verify-form-sheet__select-text {
+	min-width: 0;
+	flex: 1;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+
+	&.is-placeholder {
+		color: rgba(255, 255, 255, 0.35);
+	}
+}
+
+.map-verify-form-sheet__select-arrow {
+	flex-shrink: 0;
+	width: 16px;
+	height: 16px;
+	color: rgba(255, 255, 255, 0.45);
+}
+
+.map-verify-form-sheet__field-label-row {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 8px;
+}
+
+.map-verify-form-sheet__field-label-row .map-verify-form-sheet__field-label {
+	margin-bottom: 0;
+}
+
+.map-verify-form-sheet__field-clear {
+	flex-shrink: 0;
+	padding: 0;
+	border: 0;
+	background: transparent;
+	color: #1cded4;
+	font-size: 12px;
+	line-height: 1.3;
+	cursor: pointer;
+	-webkit-tap-highlight-color: transparent;
+
+	&:disabled {
+		opacity: 0.5;
+		cursor: not-allowed;
+	}
 }
 
 .map-verify-form-sheet__section-title {
@@ -1374,5 +1989,14 @@ onBeforeUnmount(() => {
 	border: 0;
 	background: var(--app-accent, #1cded4);
 	color: #fff;
+}
+
+.map-verify-form-sheet__btn--correct {
+	max-width: 160px;
+}
+
+.map-verify-form-sheet__btn:disabled {
+	opacity: 0.55;
+	cursor: not-allowed;
 }
 </style>

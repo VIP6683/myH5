@@ -1,6 +1,10 @@
 <!doctype html>
 <html lang="en">
   <head>
+    <!-- 微信 JSSDK 签名须用首次进入 H5 的 URL（iOS 微信 SPA 路由切换后不更新） -->
+    <script>
+      window.__WECHAT_ENTRY_URL__ = location.href.split('#')[0];
+    </script>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta

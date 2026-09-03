@@ -7,14 +7,14 @@ const loading = ref(false);
 let loadPromise = null;
 let latestQueryKey = '';
 
-function buildQueryKey(query = {}) {
-	return JSON.stringify({ query });
+function buildQueryKey({ query = {}, options = {} } = {}) {
+	return JSON.stringify({ query, options });
 }
 
 /** 线状异物任务角标统计（顶部 Tab + 底部菜单复用） */
 export function useLineTaskListCount() {
-	async function loadLineTaskListCount(query = {}) {
-		const queryKey = buildQueryKey(query);
+	async function loadLineTaskListCount(query = {}, options = {}) {
+		const queryKey = buildQueryKey({ query, options });
 		if (loadPromise && queryKey === latestQueryKey) {
 			return loadPromise;
 		}
@@ -22,7 +22,7 @@ export function useLineTaskListCount() {
 		latestQueryKey = queryKey;
 		loading.value = true;
 
-		loadPromise = fetchLineTaskListCount(query)
+		loadPromise = fetchLineTaskListCount(query, options)
 			.then((data) => {
 				if (queryKey === latestQueryKey) {
 					counts.value = normalizeTaskListCount(data);

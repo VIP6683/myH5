@@ -1,7 +1,7 @@
 import { computed, ref } from 'vue';
 import { fetchTaskList, normalizeTaskList } from '../api/statistics.js';
 
-export const TASK_LIST_PAGE_SIZE = 1500;
+export const TASK_LIST_PAGE_SIZE = 3000;
 
 const patches = ref([]);
 const total = ref(0);

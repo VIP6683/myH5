@@ -1,6 +1,6 @@
 <script setup>
 import { onBeforeUnmount, ref } from 'vue';
-import { sendSmsCode, smsLogin } from '../../api/auth.js';
+import { passwordLogin, sendSmsCode, smsLogin } from '../../api/auth.js';
 import { fetchUserInfo } from '../../api/user.js';
 import { setLogin, setUserInfo } from '../../utils/auth.js';
 import loginBg from '../../assets/images/bg/space-circle-outer.png';
@@ -8,8 +8,12 @@ import rabbitMascot from '../../assets/images/profile/rabbit-mascot.png';
 
 const emit = defineEmits(['success']);
 
+const loginMode = ref('sms');
 const phone = ref('');
 const code = ref('');
+const username = ref('');
+const password = ref('');
+const showPassword = ref(false);
 const countdown = ref(0);
 const sending = ref(false);
 const logging = ref(false);
@@ -46,6 +50,11 @@ const startCountdown = () => {
 	}, 1000);
 };
 
+const switchLoginMode = (mode) => {
+	if (loginMode.value === mode) return;
+	loginMode.value = mode;
+};
+
 const onSendCode = async () => {
 	if (countdown.value > 0 || sending.value) return;
 
@@ -67,9 +76,15 @@ const onSendCode = async () => {
 	}
 };
 
-const onLogin = async () => {
-	if (logging.value) return;
+const completeLogin = async (token, account) => {
+	setLogin(token, account);
+	const userInfo = await fetchUserInfo();
+	setUserInfo(userInfo);
+	showToast('登录成功', 'success');
+	emit('success');
+};
 
+const onSmsLogin = async () => {
 	const phoneValue = phone.value.trim();
 	const codeValue = code.value.trim();
 
@@ -83,14 +98,38 @@ const onLogin = async () => {
 		return;
 	}
 
+	const { token } = await smsLogin(phoneValue, codeValue);
+	await completeLogin(token, phoneValue);
+};
+
+const onPasswordLogin = async () => {
+	const usernameValue = username.value.trim();
+	const passwordValue = password.value;
+
+	if (!usernameValue) {
+		showToast('请输入账号');
+		return;
+	}
+
+	if (!passwordValue) {
+		showToast('请输入密码');
+		return;
+	}
+
+	const { token } = await passwordLogin(usernameValue, passwordValue);
+	await completeLogin(token, usernameValue);
+};
+
+const onLogin = async () => {
+	if (logging.value) return;
+
 	logging.value = true;
 	try {
-		const { token } = await smsLogin(phoneValue, codeValue);
-		setLogin(token, phoneValue);
-		const userInfo = await fetchUserInfo();
-		setUserInfo(userInfo);
-		showToast('登录成功', 'success');
-		emit('success');
+		if (loginMode.value === 'sms') {
+			await onSmsLogin();
+		} else {
+			await onPasswordLogin();
+		}
 	} catch (error) {
 		showToast(error?.message || '登录失败');
 	} finally {
@@ -119,46 +158,161 @@ onBeforeUnmount(() => {
 			</header>
 
 			<section class="login-page__card" aria-label="账号登录">
-				<div class="login-page__field">
-					<label class="login-page__label sr-only" for="login-phone">手机号</label>
-					<div class="login-page__input-wrap">
-						<input
-							id="login-phone"
-							v-model="phone"
-							class="login-page__input"
-							type="tel"
-							maxlength="11"
-							placeholder="请输入手机号"
-							autocomplete="tel"
-						/>
-					</div>
+				<div class="login-page__tabs" role="tablist">
+					<button
+						type="button"
+						class="login-page__tab"
+						:class="{ 'is-active': loginMode === 'sms' }"
+						role="tab"
+						:aria-selected="loginMode === 'sms'"
+						@click="switchLoginMode('sms')"
+					>
+						验证码登录
+					</button>
+					<button
+						type="button"
+						class="login-page__tab"
+						:class="{ 'is-active': loginMode === 'password' }"
+						role="tab"
+						:aria-selected="loginMode === 'password'"
+						@click="switchLoginMode('password')"
+					>
+						账号密码登录
+					</button>
 				</div>
 
-				<div class="login-page__field">
-					<label class="login-page__label sr-only" for="login-code">验证码</label>
-					<div class="login-page__input-wrap login-page__input-wrap--code">
-						<input
-							id="login-code"
-							v-model="code"
-							class="login-page__input"
-							type="tel"
-							maxlength="6"
-							placeholder="请输入短信验证码"
-							autocomplete="one-time-code"
-						/>
-						<button
-							type="button"
-							class="login-page__code-btn"
-							:class="{ 'is-disabled': countdown > 0 || sending }"
-							:disabled="countdown > 0 || sending"
-							@click="onSendCode"
-						>
-							{{
-								countdown > 0 ? `${countdown}s` : sending ? '发送中' : '获取验证码'
-							}}
-						</button>
+				<template v-if="loginMode === 'sms'">
+					<div class="login-page__field">
+						<label class="login-page__label sr-only" for="login-phone">手机号</label>
+						<div class="login-page__input-wrap">
+							<input
+								id="login-phone"
+								v-model="phone"
+								class="login-page__input"
+								type="tel"
+								maxlength="11"
+								placeholder="请输入手机号"
+								autocomplete="tel"
+							/>
+						</div>
 					</div>
-				</div>
+
+					<div class="login-page__field">
+						<label class="login-page__label sr-only" for="login-code">验证码</label>
+						<div class="login-page__input-wrap login-page__input-wrap--code">
+							<input
+								id="login-code"
+								v-model="code"
+								class="login-page__input"
+								type="tel"
+								maxlength="6"
+								placeholder="请输入短信验证码"
+								autocomplete="one-time-code"
+							/>
+							<button
+								type="button"
+								class="login-page__code-btn"
+								:class="{ 'is-disabled': countdown > 0 || sending }"
+								:disabled="countdown > 0 || sending"
+								@click="onSendCode"
+							>
+								{{
+									countdown > 0 ? `${countdown}s` : sending ? '发送中' : '获取验证码'
+								}}
+							</button>
+						</div>
+					</div>
+				</template>
+
+				<template v-else>
+					<div class="login-page__field">
+						<label class="login-page__label sr-only" for="login-username">账号</label>
+						<div class="login-page__input-wrap">
+							<input
+								id="login-username"
+								v-model="username"
+								class="login-page__input"
+								type="text"
+								maxlength="30"
+								placeholder="请输入账号"
+								autocomplete="username"
+							/>
+						</div>
+					</div>
+
+					<div class="login-page__field">
+						<label class="login-page__label sr-only" for="login-password">密码</label>
+						<div class="login-page__input-wrap login-page__input-wrap--code">
+							<input
+								id="login-password"
+								v-model="password"
+								class="login-page__input"
+								:type="showPassword ? 'text' : 'password'"
+								maxlength="32"
+								placeholder="请输入密码"
+								autocomplete="current-password"
+							/>
+							<button
+								type="button"
+								class="login-page__eye-btn"
+								:aria-label="showPassword ? '隐藏密码' : '显示密码'"
+								@click="showPassword = !showPassword"
+							>
+								<svg
+									v-if="showPassword"
+									class="login-page__eye-icon"
+									viewBox="0 0 24 24"
+									aria-hidden="true"
+								>
+									<path
+										d="M2.5 12s3.5-6.5 9.5-6.5S21.5 12 21.5 12s-3.5 6.5-9.5 6.5S2.5 12 2.5 12Z"
+										fill="none"
+										stroke="currentColor"
+										stroke-width="1.6"
+										stroke-linejoin="round"
+									/>
+									<circle
+										cx="12"
+										cy="12"
+										r="2.8"
+										fill="none"
+										stroke="currentColor"
+										stroke-width="1.6"
+									/>
+									<path
+										d="m4 4 16 16"
+										fill="none"
+										stroke="currentColor"
+										stroke-width="1.6"
+										stroke-linecap="round"
+									/>
+								</svg>
+								<svg
+									v-else
+									class="login-page__eye-icon"
+									viewBox="0 0 24 24"
+									aria-hidden="true"
+								>
+									<path
+										d="M2.5 12s3.5-6.5 9.5-6.5S21.5 12 21.5 12s-3.5 6.5-9.5 6.5S2.5 12 2.5 12Z"
+										fill="none"
+										stroke="currentColor"
+										stroke-width="1.6"
+										stroke-linejoin="round"
+									/>
+									<circle
+										cx="12"
+										cy="12"
+										r="2.8"
+										fill="none"
+										stroke="currentColor"
+										stroke-width="1.6"
+									/>
+								</svg>
+							</button>
+						</div>
+					</div>
+				</template>
 
 				<button
 					type="button"
@@ -305,6 +459,32 @@ $login-border: rgba(255, 255, 255, 0.1);
 	box-shadow: none;
 }
 
+.login-page__tabs {
+	display: flex;
+	gap: 20px;
+	margin-bottom: 14px;
+}
+
+.login-page__tab {
+	padding: 0 0 6px;
+	border: 0;
+	border-bottom: 2px solid transparent;
+	background: transparent;
+	color: rgba(255, 255, 255, 0.48);
+	font-size: 14px;
+	font-weight: 500;
+	line-height: 1.2;
+	cursor: pointer;
+	transition:
+		color 0.15s ease,
+		border-color 0.15s ease;
+
+	&.is-active {
+		color: rgba(255, 255, 255, 0.92);
+		border-bottom-color: $login-accent;
+	}
+}
+
 .login-page__field + .login-page__field {
 	margin-top: 8px;
 }
@@ -393,6 +573,35 @@ $login-border: rgba(255, 255, 255, 0.1);
 		color: $login-text-muted;
 		cursor: not-allowed;
 	}
+}
+
+.login-page__eye-btn {
+	flex-shrink: 0;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 32px;
+	height: 32px;
+	padding: 0;
+	border: 0;
+	border-radius: 6px;
+	background: transparent;
+	color: rgba(255, 255, 255, 0.58);
+	cursor: pointer;
+	transition:
+		color 0.15s ease,
+		background 0.15s ease;
+
+	&:active {
+		background: rgba(255, 255, 255, 0.08);
+		color: rgba(255, 255, 255, 0.82);
+	}
+}
+
+.login-page__eye-icon {
+	width: 18px;
+	height: 18px;
+	display: block;
 }
 
 .login-page__submit {

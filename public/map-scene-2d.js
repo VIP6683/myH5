@@ -9,7 +9,7 @@ window.MAP_SCENE_2D_CONFIG = {
 	zoom: 8,
 	minZoom: 6,
 	/** 与天地图影像 maximumLevel 对齐，避免放大过头露出空白底 */
-	maxZoom: 17,
+	maxZoom: 19,
 	interaction: {
 		inertia: false,
 		zoomSnap: 0.25,

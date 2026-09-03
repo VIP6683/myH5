@@ -6,7 +6,8 @@ import { emitMapEvent, MapEventType } from '../../../map-kit/core/mapEvents.js';
 import { getMapInstance } from '../../../map-kit/mapApi.js';
 import {
 	buildMonitorAreaStyle,
-	getAbnormalTypeColor
+	getAbnormalTypeColor,
+	shouldFillMonitorPatch
 } from '../constants/abnormalType.js';
 import { MONITOR_LAYER_ID } from '../constants/monitorLayer.js';
 
@@ -198,9 +199,10 @@ async function ensureMonitorLayers(map) {
 	return { shapeLayer: monitorLayer, clusterLayer };
 }
 
-function resolvePatchStyle(patch) {
+function resolvePatchStyle(patch, kind) {
 	const color = getAbnormalTypeColor(patch?.attr?.objectType);
-	return buildMonitorAreaStyle(color);
+	const filled = shouldFillMonitorPatch(kind, patch?.attr?.taskStatus);
+	return buildMonitorAreaStyle(color, { filled });
 }
 
 function addPatchGraphic(layer, mars2d, patch, kind) {
@@ -211,7 +213,7 @@ function addPatchGraphic(layer, mars2d, patch, kind) {
 		kind,
 		coordinates: center
 	};
-	const style = resolvePatchStyle(patch);
+	const style = resolvePatchStyle(patch, kind);
 
 	const graphic = new mars2d.graphic.Polygon({
 		id: patch.id,

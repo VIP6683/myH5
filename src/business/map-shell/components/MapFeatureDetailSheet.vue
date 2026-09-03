@@ -34,19 +34,15 @@ const verifyActionLabel = computed(() => {
 		return '开始核查';
 	}
 
-	const isChecked = Number(info.checkStatus) === 1;
-	const isDisposed = Number(info.disposalStatus) === 1;
+	const hasCheckPhotos = parseAbnormalPhotoUrls(info.checkPhotos).length > 0;
+	const hasDisposalPhotos = parseAbnormalPhotoUrls(info.disposalPhotos).length > 0;
 
-	if (isChecked) {
-		return isDisposed ? '查看核查信息' : '继续处置';
+	// 核查必传 checkPhotos：有核查照且无处置照 → 继续处置；两者都有 → 查看信息
+	if (hasCheckPhotos) {
+		return hasDisposalPhotos ? '查看信息' : '继续处置';
 	}
 
-	const hasCheckInfo =
-		parseAbnormalPhotoUrls(info.checkPhotos).length > 0 ||
-		Boolean(info.checkOpinion) ||
-		Boolean(info.checkRemark);
-
-	return hasCheckInfo ? '查看核查信息' : '开始核查';
+	return '开始核查';
 });
 
 const rows = computed(() => {
@@ -59,6 +55,7 @@ const rows = computed(() => {
 		detail.kind === 'line'
 			? [
 					{ label: '变电站编号', value: detail.substationNo },
+					{ label: '线路名称', value: detail.lineName },
 					{ label: '所属杆塔区段', value: detail.poleSection },
 					{ label: '期数', value: detail.phase },
 					{ label: '图斑面积(m²)', value: detail.patchArea },
@@ -105,7 +102,10 @@ const playEnter = () => {
 };
 
 const onPanelTransitionEnd = (event) => {
-	if (event.propertyName !== 'transform' || animClass.value !== 'map-feature-detail-sheet--enter') {
+	if (
+		event.propertyName !== 'transform' ||
+		animClass.value !== 'map-feature-detail-sheet--enter'
+	) {
 		return;
 	}
 	isPanelSettled.value = true;
@@ -182,7 +182,11 @@ onBeforeUnmount(() => {
 				<div class="map-feature-detail-sheet__body">
 					<p v-if="loading" class="map-feature-detail-sheet__loading">加载中...</p>
 					<dl v-else class="map-feature-detail-sheet__list">
-						<div v-for="row in rows" :key="row.label" class="map-feature-detail-sheet__row">
+						<div
+							v-for="row in rows"
+							:key="row.label"
+							class="map-feature-detail-sheet__row"
+						>
 							<dt class="map-feature-detail-sheet__label">{{ row.label }}</dt>
 							<dd class="map-feature-detail-sheet__value">{{ row.value }}</dd>
 						</div>
@@ -269,7 +273,7 @@ onBeforeUnmount(() => {
 	margin: 0;
 	font-size: 15px;
 	font-weight: 700;
-	color: #1cDED4;
+	color: #1cded4;
 	font-size: 14px;
 	line-height: 1.25;
 }

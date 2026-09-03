@@ -1,4 +1,7 @@
-// 临时测试：微信内也走 navigator.geolocation，验证 HTTPS 下是否可用
+import {
+	getWeChatCurrentLocation,
+	isWeChatEnv
+} from '../business/nav-demo/utils/wechatJssdk.js';
 
 /** Geolocation 错误码 */
 export const LOCATION_ERROR = {
@@ -37,11 +40,32 @@ export function canUseNativeGeolocation() {
 	return typeof navigator !== 'undefined' && !!navigator.geolocation && isGeolocationSecureContext();
 }
 
+function getMapChinaCRSFromConfig() {
+	const config = window.APP_MAP_CONFIG || {};
+	return config.basemap?.chinaCRS || config.annotation?.chinaCRS || 'WGS84';
+}
+
+/** 微信 wx.getLocation 的 type，需与地图 chinaCRS 对齐 */
+function getWeChatCoordinateType() {
+	return getMapChinaCRSFromConfig() === 'GCJ02' ? 'gcj02' : 'wgs84';
+}
+
+function hasWeChatJssdkConfig() {
+	// 签名走后端 POST /result/wechat/signature；留空时前端仍用默认路径
+	const cfg = window.AppConfig?.wechat;
+	return cfg?.jssdkSignUrl !== false && cfg?.enabled !== false;
+}
+
 /**
  * 当前环境将使用的定位方式。
+ * 微信内优先走 wx.getLocation（iOS 微信对 HTML5 Geolocation 支持很差）。
  * @returns {'wechat' | 'native' | 'unsupported'}
  */
 export function getLocationProvider() {
+	if (typeof navigator !== 'undefined' && isWeChatEnv()) {
+		return 'wechat';
+	}
+
 	return canUseNativeGeolocation() ? 'native' : 'unsupported';
 }
 
@@ -79,7 +103,7 @@ export function getLocationErrorMessage(error) {
 	}
 
 	if (error.reason === 'wechat_jssdk_not_configured') {
-		return '微信内定位需配置 JSSDK 签名（public/app-config.js 的 wechat.jssdkSignUrl），并将访问域名加入公众号 JS 接口安全域名。';
+		return '微信内定位不可用：请确认已登录，且访问域名已加入公众号 JS 接口安全域名。';
 	}
 
 	if (isInsecureOriginError(error)) {
@@ -124,7 +148,8 @@ function getNativeCurrentLocation(options = {}) {
 					lat,
 					accuracy,
 					altitude: typeof altitude === 'number' ? altitude : undefined,
-					source: 'native'
+					source: 'native',
+					coordinateType: 'wgs84'
 				});
 			},
 			(error) => {
@@ -136,11 +161,34 @@ function getNativeCurrentLocation(options = {}) {
 }
 
 /**
- * 获取当前设备经纬度（navigator.geolocation，需 HTTPS）。
- * @param {PositionOptions} [options]
+ * 获取当前设备经纬度。
+ * 微信内走 wx.getLocation；其它环境走 navigator.geolocation（需 HTTPS）。
+ * @param {PositionOptions & { coordinateType?: string }} [options]
  * @returns {Promise<{ lng: number, lat: number, accuracy?: number, altitude?: number, source: string }>}
  */
 export async function getCurrentLocation(options = {}) {
+	const provider = getLocationProvider();
+
+	if (provider === 'wechat') {
+		if (!hasWeChatJssdkConfig()) {
+			const error = new Error('微信 JSSDK 未配置');
+			error.reason = 'wechat_jssdk_not_configured';
+			error.code = LOCATION_ERROR.PERMISSION_DENIED;
+			throw error;
+		}
+		return getWeChatCurrentLocation({
+			...options,
+			coordinateType: options.coordinateType || getWeChatCoordinateType()
+		});
+	}
+
+	if (provider === 'unsupported') {
+		const error = new Error('Origin does not have permission to use Geolocation service');
+		error.code = LOCATION_ERROR.PERMISSION_DENIED;
+		error.reason = 'insecure';
+		throw error;
+	}
+
 	if (typeof navigator === 'undefined' || !navigator.geolocation) {
 		throw new Error('当前浏览器不支持定位');
 	}

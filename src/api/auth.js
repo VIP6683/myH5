@@ -1,4 +1,5 @@
 import request from './request.js';
+import { encryptBySm2 } from '../utils/sm2.js';
 
 function extractLoginToken(payload) {
 	if (typeof payload === 'string' && payload) {
@@ -28,6 +29,26 @@ export async function smsLogin(phonenumber, smsCode) {
 		url: '/auth/smsLogin',
 		method: 'post',
 		data: { phonenumber, smsCode },
+		isToken: false
+	});
+
+	const token = extractLoginToken(result);
+	if (!token) {
+		throw new Error('登录失败，未获取到 token');
+	}
+
+	return { token, raw: result };
+}
+
+/** 账号密码登录 */
+export async function passwordLogin(username, password) {
+	const result = await request({
+		url: '/auth/login',
+		method: 'post',
+		data: {
+			username,
+			password: encryptBySm2(password)
+		},
 		isToken: false
 	});
 

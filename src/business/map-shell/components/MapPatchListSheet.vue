@@ -22,7 +22,7 @@ const {
 	listHasMore: lineTaskListListHasMore,
 	loading: lineTaskListLoading,
 	loadingMore: lineTaskListLoadingMore,
-	revealMoreLineListRows
+	revealMoreListRows: revealMoreLineListRows
 } = useLineTaskList();
 
 const visible = defineModel('visible', { type: Boolean, default: false });
@@ -48,8 +48,7 @@ const props = defineProps({
 		default: () => ({
 			year: '',
 			objectType: '',
-			verifyStatus: '',
-			disposeStatus: ''
+			taskStatus: ''
 		})
 	}
 });
@@ -191,16 +190,15 @@ watch(visible, (value) => {
 			<div
 				ref="tableWrapRef"
 				class="map-patch-list-sheet__table-wrap"
-				:class="{ 'is-expanded': snap === 'expanded' }"
 				data-bottom-sheet-scroll
 				@scroll.passive="onTableScroll"
 			>
 				<table class="map-patch-list-sheet__table">
 					<thead>
 						<tr>
+							<th>序号</th>
 							<th>年份</th>
 							<th>异物类型</th>
-							<th>核查状态</th>
 							<th>处置状态</th>
 							<th>操作</th>
 						</tr>
@@ -209,10 +207,10 @@ watch(visible, (value) => {
 						<tr v-if="!listRows.length && !listLoading">
 							<td class="map-patch-list-sheet__empty" colspan="5">暂无数据</td>
 						</tr>
-						<tr v-for="row in listRows" :key="row.id">
+						<tr v-for="(row, index) in listRows" :key="row.id">
+							<td>{{ index + 1 }}</td>
 							<td>{{ row.year }}</td>
 							<td>{{ row.objectTypeLabel }}</td>
-							<td>{{ row.verifyStatusLabel }}</td>
 							<td>{{ row.disposeStatusLabel }}</td>
 							<td>
 								<button
@@ -258,7 +256,6 @@ watch(visible, (value) => {
 	flex: 1;
 	display: flex;
 	flex-direction: column;
-	height: 100%;
 }
 
 .map-patch-list-sheet__table-wrap {
@@ -268,14 +265,9 @@ watch(visible, (value) => {
 	overflow-x: hidden;
 	overflow-y: auto;
 	background: var(--app-drawer-surface, #25282c);
-	max-height: min(52vh, 420px);
 	-webkit-overflow-scrolling: touch;
 	overscroll-behavior: contain;
 	touch-action: pan-y;
-
-	&.is-expanded {
-		max-height: none;
-	}
 }
 
 .map-patch-list-sheet__table {
@@ -317,24 +309,27 @@ watch(visible, (value) => {
 
 .map-patch-list-sheet__table th:first-child,
 .map-patch-list-sheet__table td:first-child {
-	width: 16%;
+	width: 12%;
 }
 
 .map-patch-list-sheet__table th:nth-child(2),
 .map-patch-list-sheet__table td:nth-child(2) {
-	width: 22%;
+	width: 18%;
 }
 
 .map-patch-list-sheet__table th:nth-child(3),
-.map-patch-list-sheet__table td:nth-child(3),
+.map-patch-list-sheet__table td:nth-child(3) {
+	width: 24%;
+}
+
 .map-patch-list-sheet__table th:nth-child(4),
 .map-patch-list-sheet__table td:nth-child(4) {
-	width: 18%;
+	width: 24%;
 }
 
 .map-patch-list-sheet__table th:last-child,
 .map-patch-list-sheet__table td:last-child {
-	width: 14%;
+	width: 22%;
 }
 
 .map-patch-list-sheet__empty {

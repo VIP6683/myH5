@@ -296,9 +296,10 @@ export function useBottomSheetSnap(options) {
 		);
 		const fullExpandedHeightPx = Math.max(0, viewportHeight - topPx);
 		const { collapsedHeightPx, peekHeightPx } = metrics.value;
+		// 常驻三档面板在 peek/collapsed 用真实高度，避免「全高 + translate」
+		// 导致内部滚动区高于可见区域、底部内容被裁切却滚不到。
 		const useDocked =
 			tripleSnap &&
-			insetBottomPx > 0 &&
 			(level !== 'expanded' || (isDragging.value && snapAtDragStart !== 'expanded'));
 
 		if (useDocked) {
@@ -432,12 +433,7 @@ export function useBottomSheetSnap(options) {
 	};
 
 	const snapToNearest = (velocity) => {
-		const viewportHeight = getViewportHeight();
-		const insetBottomPx = resolveBottomInset(
-			bottomInset?.value ?? bottomInset ?? 0,
-			viewportHeight
-		);
-		const dockedDrag = tripleSnap && insetBottomPx > 0 && snapAtDragStart !== 'expanded';
+		const dockedDrag = tripleSnap && snapAtDragStart !== 'expanded';
 
 		if (dockedDrag) {
 			snapTripleDocked(velocity);

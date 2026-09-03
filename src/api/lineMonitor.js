@@ -16,24 +16,10 @@ const ABNORMAL_TYPE_LABELS = {
 	5: { value: 'water', label: '水体' }
 };
 
-const CHECK_STATUS_MAP = {
-	0: 'unverified',
-	1: 'verified'
-};
-
-const DISPOSAL_STATUS_MAP = {
-	0: 'undisposed',
-	1: 'disposed'
-};
-
-const VERIFY_STATUS_API_MAP = {
-	unverified: 0,
-	verified: 1
-};
-
-const DISPOSE_STATUS_API_MAP = {
-	undisposed: 0,
-	disposed: 1
+/** 任务状态：0 未核查，1 已核查，2 待处置，3 已处置 */
+const HEADER_TAB_TASK_STATUS = {
+	'pending-verify': 0,
+	'pending-dispose': 2
 };
 
 function appendQueryParam(params, key, value) {
@@ -55,7 +41,7 @@ function pickDefaultYearPeriod(filters = {}) {
 	return { year: currentYear, period: 1 };
 }
 
-function appendTaskListFilters(params, query = {}, options = {}) {
+function appendTaskListCommonFilters(params, query = {}, options = {}) {
 	const { year, period } = pickDefaultYearPeriod(query);
 
 	appendQueryParam(params, 'year', year);
@@ -68,31 +54,48 @@ function appendTaskListFilters(params, query = {}, options = {}) {
 		query.abnormalCode;
 	appendQueryParam(params, 'abnormalCode', abnormalCode);
 
-	const keyword =
-		options.keyword?.trim?.() || options.keyword || query.keyword?.trim?.() || query.keyword;
-	appendQueryParam(params, 'keyword', keyword);
+	const lineName =
+		options.lineName?.trim?.() ||
+		options.lineName ||
+		query.lineName?.trim?.() ||
+		query.lineName;
+	appendQueryParam(params, 'lineName', lineName);
+
+	const startTower =
+		options.startTower?.trim?.() ||
+		options.startTower ||
+		query.startTower?.trim?.() ||
+		query.startTower;
+	appendQueryParam(params, 'startTower', startTower);
+
+	const endTower =
+		options.endTower?.trim?.() ||
+		options.endTower ||
+		query.endTower?.trim?.() ||
+		query.endTower;
+	appendQueryParam(params, 'endTower', endTower);
 
 	const objectType = Array.isArray(query.objectType) ? query.objectType[0] : query.objectType;
 	if (objectType && LINE_OBJECT_TYPE_API_MAP[objectType] !== undefined) {
 		appendQueryParam(params, 'abnormalType', LINE_OBJECT_TYPE_API_MAP[objectType]);
 	}
 
-	if (query.verifyStatus && VERIFY_STATUS_API_MAP[query.verifyStatus] !== undefined) {
-		appendQueryParam(params, 'checkStatus', VERIFY_STATUS_API_MAP[query.verifyStatus]);
-	} else if (options.headerTab === 'pending-verify') {
-		appendQueryParam(params, 'checkStatus', 0);
-	}
+	appendQueryParam(params, 'distanceRange', query.distanceSubstationRange);
+}
 
-	if (query.disposeStatus && DISPOSE_STATUS_API_MAP[query.disposeStatus] !== undefined) {
-		appendQueryParam(params, 'disposalStatus', DISPOSE_STATUS_API_MAP[query.disposeStatus]);
-	} else if (options.headerTab === 'pending-dispose') {
-		appendQueryParam(params, 'disposalStatus', 0);
+function appendTaskListFilters(params, query = {}, options = {}) {
+	appendTaskListCommonFilters(params, query, options);
+
+	if (query.taskStatus !== undefined && query.taskStatus !== null && query.taskStatus !== '') {
+		appendQueryParam(params, 'taskStatus', query.taskStatus);
+	} else if (HEADER_TAB_TASK_STATUS[options.headerTab] !== undefined) {
+		appendQueryParam(params, 'taskStatus', HEADER_TAB_TASK_STATUS[options.headerTab]);
 	}
 }
 
-function buildLineTaskListCountParams(query = {}) {
+function buildLineTaskListCountParams(query = {}, options = {}) {
 	const params = {};
-	appendTaskListFilters(params, query);
+	appendTaskListCommonFilters(params, query, options);
 	return params;
 }
 
@@ -104,11 +107,43 @@ function buildLineTaskListParams(query = {}, options = {}) {
 	return params;
 }
 
+/**
+ * 规范化线路名称下拉选项
+ * @param {unknown} payload
+ * @returns {{ label: string, value: string }[]}
+ */
+export function normalizeLineNameOptions(payload) {
+	const list = Array.isArray(payload) ? payload : [];
+	return list
+		.map((item) => {
+			if (typeof item === 'string' || typeof item === 'number') {
+				const value = String(item).trim();
+				return { label: value, value };
+			}
+			const value = item?.value ?? item?.lineName ?? item?.label ?? '';
+			const label = item?.label ?? item?.lineName ?? value;
+			return {
+				label: String(label).trim(),
+				value: String(value).trim()
+			};
+		})
+		.filter((item) => item.value);
+}
+
 /** 年份选项 */
 export function fetchLineAllYear() {
 	return request({
 		url: '/result/abnormalMonitor/getAllYear',
 		method: 'get'
+	});
+}
+
+/** 线路名称选项 GET /result/abnormalMonitor/taskList/lineNames */
+export function fetchLineAllLineName(params = {}) {
+	return request({
+		url: '/result/abnormalMonitor/taskList/lineNames',
+		method: 'get',
+		params
 	});
 }
 
@@ -131,11 +166,11 @@ export function fetchLinePersonalTaskStats(year) {
 }
 
 /** 任务列表角标统计 */
-export function fetchLineTaskListCount(query = {}) {
+export function fetchLineTaskListCount(query = {}, options = {}) {
 	return request({
 		url: '/result/abnormalMonitor/taskList/count',
 		method: 'get',
-		params: buildLineTaskListCountParams(query)
+		params: buildLineTaskListCountParams(query, options)
 	});
 }
 
@@ -148,10 +183,10 @@ export function fetchLineTaskList(query = {}, options = {}) {
 	});
 }
 
-/** 线状异物监测详细信息 */
+/** 线状异物监测详细信息 GET /result/abnormalTask/{id} */
 export function fetchAbnormalMonitorDetail(id) {
 	return request({
-		url: `/result/abnormalMonitor/${encodeURIComponent(String(id))}`,
+		url: `/result/abnormalTask/${encodeURIComponent(String(id))}`,
 		method: 'get'
 	});
 }
@@ -179,7 +214,7 @@ export function normalizeAbnormalMonitorDetail(row) {
 		lat !== '';
 	const coordinates = hasCoordinates ? { lng: Number(lng), lat: Number(lat) } : undefined;
 	const additionalInfo = row?.additionalInfo;
-	const additionalInfoId = additionalInfo?.id;
+	const additionalInfoId = additionalInfo?.taskId;
 
 	return {
 		kind: 'line',
@@ -247,8 +282,7 @@ export function normalizeLineTaskListRow(row) {
 			phase: period ? `第${period}期` : '',
 			objectType: abnormalType.value,
 			objectTypeLabel: abnormalType.label,
-			verifyStatus: CHECK_STATUS_MAP[Number(row?.checkStatus)] ?? 'unverified',
-			disposeStatus: DISPOSAL_STATUS_MAP[Number(row?.disposalStatus)] ?? 'undisposed',
+			taskStatus: row?.taskStatus != null && row?.taskStatus !== '' ? String(row.taskStatus) : '',
 			objectNo: row?.abnormalCode != null ? String(row.abnormalCode) : '',
 			substationNo:
 				row?.substationCode != null

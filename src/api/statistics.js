@@ -126,24 +126,10 @@ const ABNORMAL_TYPE_LABELS = {
 	4: { value: 'greenhouse', label: '塑料大棚' }
 };
 
-const CHECK_STATUS_MAP = {
-	0: 'unverified',
-	1: 'verified'
-};
-
-const DISPOSAL_STATUS_MAP = {
-	0: 'undisposed',
-	1: 'disposed'
-};
-
-const VERIFY_STATUS_API_MAP = {
-	unverified: 0,
-	verified: 1
-};
-
-const DISPOSE_STATUS_API_MAP = {
-	undisposed: 0,
-	disposed: 1
+/** 任务状态：0 未核查，1 已核查，2 待处置，3 已处置 */
+const HEADER_TAB_TASK_STATUS = {
+	'pending-verify': 0,
+	'pending-dispose': 2
 };
 
 /**
@@ -160,8 +146,8 @@ const DISPOSE_STATUS_API_MAP = {
  * @property {string} [abnormalCode]
  * @property {string} [keyword]
  * @property {string} [objectType]
- * @property {string} [verifyStatus]
- * @property {string} [disposeStatus]
+ * @property {string | number} [taskStatus] 任务状态：0 未核查，1 已核查，2 待处置，3 已处置
+ * @property {string | number} [distanceSubstationRange] 异物距离区间：0~5
  */
 
 function appendQueryParam(params, key, value) {
@@ -205,7 +191,7 @@ function pickDefaultYearPeriod(filters = {}) {
  * @property {TaskListPatch[]} patches
  */
 
-function appendTaskListFilters(params, query = {}, options = {}) {
+function appendTaskListCommonFilters(params, query = {}, options = {}) {
 	const { year, period } = pickDefaultYearPeriod(query);
 
 	appendQueryParam(params, 'year', year);
@@ -219,10 +205,7 @@ function appendTaskListFilters(params, query = {}, options = {}) {
 	appendQueryParam(params, 'abnormalCode', abnormalCode);
 
 	const keyword =
-		options.keyword?.trim?.() ||
-		options.keyword ||
-		query.keyword?.trim?.() ||
-		query.keyword;
+		options.keyword?.trim?.() || options.keyword || query.keyword?.trim?.() || query.keyword;
 	appendQueryParam(params, 'keyword', keyword);
 
 	const objectType = Array.isArray(query.objectType) ? query.objectType[0] : query.objectType;
@@ -230,22 +213,22 @@ function appendTaskListFilters(params, query = {}, options = {}) {
 		appendQueryParam(params, 'abnormalType', OBJECT_TYPE_API_MAP[objectType]);
 	}
 
-	if (query.verifyStatus && VERIFY_STATUS_API_MAP[query.verifyStatus] !== undefined) {
-		appendQueryParam(params, 'checkStatus', VERIFY_STATUS_API_MAP[query.verifyStatus]);
-	} else if (options.headerTab === 'pending-verify') {
-		appendQueryParam(params, 'checkStatus', 0);
-	}
+	appendQueryParam(params, 'distanceSubstationRange', query.distanceSubstationRange);
+}
 
-	if (query.disposeStatus && DISPOSE_STATUS_API_MAP[query.disposeStatus] !== undefined) {
-		appendQueryParam(params, 'disposalStatus', DISPOSE_STATUS_API_MAP[query.disposeStatus]);
-	} else if (options.headerTab === 'pending-dispose') {
-		appendQueryParam(params, 'disposalStatus', 0);
+function appendTaskListFilters(params, query = {}, options = {}) {
+	appendTaskListCommonFilters(params, query, options);
+
+	if (query.taskStatus !== undefined && query.taskStatus !== null && query.taskStatus !== '') {
+		appendQueryParam(params, 'taskStatus', query.taskStatus);
+	} else if (HEADER_TAB_TASK_STATUS[options.headerTab] !== undefined) {
+		appendQueryParam(params, 'taskStatus', HEADER_TAB_TASK_STATUS[options.headerTab]);
 	}
 }
 
-function buildTaskListCountParams(query = {}) {
+function buildTaskListCountParams(query = {}, options = {}) {
 	const params = {};
-	appendTaskListFilters(params, query);
+	appendTaskListCommonFilters(params, query, options);
 	return params;
 }
 
@@ -263,11 +246,11 @@ function buildTaskListParams(query = {}, options = {}) {
  * @param {TaskListCountQuery} [query]
  * @returns {Promise<TaskListCountVo>}
  */
-export function fetchTaskListCount(query = {}) {
+export function fetchTaskListCount(query = {}, options = {}) {
 	return request({
 		url: '/result/abnormalSurface/taskList/count',
 		method: 'get',
-		params: buildTaskListCountParams(query)
+		params: buildTaskListCountParams(query, options)
 	});
 }
 
@@ -300,13 +283,13 @@ export function fetchTaskList(query = {}, options = {}) {
 
 /**
  * 面状异物监测详细信息
- * GET /result/abnormalSurface/{id}
+ * GET /result/abnormalTask/{id}
  * @param {string | number} id
  * @returns {Promise<unknown>}
  */
 export function fetchAbnormalSurfaceDetail(id) {
 	return request({
-		url: `/result/abnormalSurface/${encodeURIComponent(String(id))}`,
+		url: `/result/abnormalTask/${encodeURIComponent(String(id))}`,
 		method: 'get'
 	});
 }
@@ -338,7 +321,7 @@ export function normalizeAbnormalSurfaceDetail(row) {
 		lat !== '';
 	const coordinates = hasCoordinates ? { lng: Number(lng), lat: Number(lat) } : undefined;
 	const additionalInfo = row?.additionalInfo;
-	const additionalInfoId = additionalInfo?.id;
+	const additionalInfoId = additionalInfo?.taskId;
 
 	return {
 		kind: 'area',
@@ -401,8 +384,8 @@ export function normalizeTaskListRow(row) {
 			phase: period ? `第${period}期` : '',
 			objectType: abnormalType.value,
 			objectTypeLabel: abnormalType.label,
-			verifyStatus: CHECK_STATUS_MAP[Number(row?.checkStatus)] ?? 'unverified',
-			disposeStatus: DISPOSAL_STATUS_MAP[Number(row?.disposalStatus)] ?? 'undisposed',
+			taskStatus:
+				row?.taskStatus != null && row?.taskStatus !== '' ? String(row.taskStatus) : '',
 			objectNo: row?.abnormalCode != null ? String(row.abnormalCode) : '',
 			substationNo: row?.substationCode != null ? String(row.substationCode) : '',
 			substationName: row?.substationName || '',
@@ -504,11 +487,12 @@ export function parseAbnormalPhotoUrls(value) {
 
 /**
  * @typedef {Object} AbnormalMonitorAdditionalInfoPayload
- * @property {number | string} id 异物附加信息 id（详情 additionalInfo.id）
+ * @property {number | string} id 任务 id（详情 additionalInfo.taskId，作为路径 taskId）
  * @property {number} [isAccounted] 是否纳入台账：0 否，1 是
  * @property {number} [checkStatus] 核查状态：0 待核查，1 已核查
- * @property {number} [checkType] 核查类型：0 线下，1 线上
- * @property {number} [disposalStatus] 处置状态：0 待处置，1 已处置
+ * @property {number} [checkType] 核查类型：0 线上，1 线下
+ * @property {number} [disposalStatus] 处置状态：0 待处置，1 已处置，2 无需处置
+ * @property {number} [correctStatus] 关注状态：0 不用关注，1 短期关注，2 长期关注（字典 correct_staus）
  * @property {string} [checkOpinion] 核查意见
  * @property {string} [checkRemark] 备注
  * @property {string} [checkPhotos] 核查照片 url 列表（JSON 数组字符串）
@@ -517,13 +501,35 @@ export function parseAbnormalPhotoUrls(value) {
 
 /**
  * 保存异物附加信息（核查提交）
- * POST /result/abnormalMonitorAdditionalInfo/save
+ * POST /abnormalTask/{taskId}/additionalInfo
  * @param {AbnormalMonitorAdditionalInfoPayload} data
  * @returns {Promise<unknown>}
  */
 export function saveAbnormalMonitorAdditionalInfo(data) {
+	const taskId = data?.id;
 	return request({
-		url: '/result/abnormalMonitorAdditionalInfo/save',
+		url: `/result/abnormalTask/${taskId}/additionalInfo`,
+		method: 'post',
+		data
+	});
+}
+
+/**
+ * @typedef {Object} AbnormalTaskCorrectPayload
+ * @property {string | number} correctAbnormalType 改正类型字典值
+ * @property {string} [correctRemark] 改正备注（选择「其他」时必填）
+ */
+
+/**
+ * 图斑改正
+ * POST /result/abnormalTask/{taskId}/correct
+ * @param {string | number} taskId 当前图斑对应的任务 ID（详情 additionalInfo.taskId）
+ * @param {AbnormalTaskCorrectPayload} data
+ * @returns {Promise<unknown>}
+ */
+export function correctAbnormalTask(taskId, data) {
+	return request({
+		url: `/result/abnormalTask/${encodeURIComponent(String(taskId))}/correct`,
 		method: 'post',
 		data
 	});

@@ -128,8 +128,10 @@ export function buildMapLayerOptions() {
 }
 
 export function createDefaultMapOptions() {
+	const config = getAppMapConfig();
 	const { basemaps, layers, scene } = buildMapLayerOptions();
 	const centerView = resolveCameraView(scene.center);
+	const chinaCRS = config.basemap?.chinaCRS || config.annotation?.chinaCRS || 'WGS84';
 
 	return {
 		basemaps,
@@ -138,6 +140,7 @@ export function createDefaultMapOptions() {
 		minZoom: scene.minZoom,
 		maxZoom: scene.maxZoom,
 		center: { lng: centerView.lng, lat: centerView.lat },
+		chinaCRS,
 		...scene
 	};
 }

@@ -51,7 +51,9 @@ body * {
 
 .year-picker-sheet__wheel,
 .draggable-bottom-sheet__body.is-scrollable,
-.map-feature-detail-sheet__list {
+.map-feature-detail-sheet__list,
+.mine-page__body,
+.map-data-stats-panel__table-wrap {
   touch-action: pan-y;
 }
 

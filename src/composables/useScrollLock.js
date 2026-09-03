@@ -16,7 +16,9 @@ const SCROLL_ALLOW_SELECTOR = [
 	'.map-feature-detail-sheet__list',
 	'.map-filter-panel__body',
 	'.map-modal-card__body',
-	'.year-picker-sheet__wheel'
+	'.year-picker-sheet__wheel',
+	'.mine-page__body',
+	'.map-data-stats-panel__table-wrap'
 ].join(',');
 
 /** 识别弹层根节点，用于遮罩区拦截滚动 */

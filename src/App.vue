@@ -1,5 +1,5 @@
 <script setup>
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import { computed, onBeforeUnmount, onMounted, watch } from 'vue';
 import { RouterView, useRoute } from 'vue-router';
 import LoginPage from './views/login/index.vue';
 import MapFloatingTabBar from './business/map-shell/components/MapFloatingTabBar.vue';
@@ -10,19 +10,17 @@ import { useMonitorAccess } from './composables/useMonitorAccess.js';
 import { loggedIn, useAuthSession } from './composables/useAuthSession.js';
 import { useLineTaskListCount } from './composables/useLineTaskListCount.js';
 import { useTaskListCount } from './composables/useTaskListCount.js';
-import { resolveDefaultMonitorFilters } from './business/map-shell/utils/monitorFilters.js';
+import { preloadWeChatJssdk } from './business/nav-demo/utils/wechatJssdk.js';
 import AppToast from './components/AppToast.vue';
-import MobileDebugButton from './components/debug/MobileDebugButton.vue';
 
 const { markLoggedIn } = useAuthSession();
 const { hasAreaMonitor, hasLineMonitor } = useMonitorAccess();
-const { counts, loadTaskListCount, resetTaskListCount } = useTaskListCount();
-const { counts: lineCounts, loadLineTaskListCount, resetLineTaskListCount } =
-	useLineTaskListCount();
+const { counts, resetTaskListCount } = useTaskListCount();
+const { counts: lineCounts, resetLineTaskListCount } = useLineTaskListCount();
 const route = useRoute();
 const globalTabBar = useGlobalTabBar();
 let disposeVisualViewport = null;
-let mapScrollLockHeld = false;
+let appScrollLockHeld = false;
 
 const isMapRoute = computed(() => route.matched.some((record) => record.meta.layout === 'map'));
 
@@ -56,49 +54,21 @@ const tabBarTabs = computed(() => {
 	return tabs;
 });
 
-async function refreshTaskListCount() {
-	const tasks = [];
-
-	if (hasAreaMonitor.value) {
-		tasks.push(
-			resolveDefaultMonitorFilters('area').then((filters) => loadTaskListCount(filters))
-		);
-	}
-
-	if (hasLineMonitor.value) {
-		tasks.push(
-			resolveDefaultMonitorFilters('line').then((filters) => loadLineTaskListCount(filters))
-		);
-	}
-
-	if (!tasks.length) {
-		return;
-	}
-
-	try {
-		await Promise.allSettled(tasks);
-	} catch {
-		// 角标加载失败时保持默认值
-	}
-}
-
 function syncViewMode(isMapView) {
 	document.body.classList.toggle('is-map-view', isMapView);
 	document.body.classList.toggle('is-login-view', !loggedIn.value);
 }
 
-function syncMapScrollLock(mapView, authed) {
-	const shouldLock = authed && mapView;
-
-	if (shouldLock && !mapScrollLockHeld) {
+function syncAppScrollLock(authed) {
+	if (authed && !appScrollLockHeld) {
 		lockScroll();
-		mapScrollLockHeld = true;
+		appScrollLockHeld = true;
 		return;
 	}
 
-	if (!shouldLock && mapScrollLockHeld) {
+	if (!authed && appScrollLockHeld) {
 		unlockScroll();
-		mapScrollLockHeld = false;
+		appScrollLockHeld = false;
 	}
 }
 
@@ -110,7 +80,7 @@ watch(
 			resetLineTaskListCount();
 			document.body.classList.remove('is-map-view');
 			document.body.classList.add('is-login-view');
-			syncMapScrollLock(false, false);
+			syncAppScrollLock(false);
 			return;
 		}
 		if (!hasAreaMonitor.value) {
@@ -119,9 +89,10 @@ watch(
 		if (!hasLineMonitor.value) {
 			resetLineTaskListCount();
 		}
-		refreshTaskListCount().catch(() => {});
+		// 签名接口需 Token，登录后再预加载，避免未登录请求失败污染状态
+		preloadWeChatJssdk();
 		syncViewMode(mapView);
-		syncMapScrollLock(mapView, authed);
+		syncAppScrollLock(authed);
 	},
 	{ immediate: true }
 );
@@ -136,7 +107,7 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
 	disposeVisualViewport?.();
-	mapScrollLockHeld = false;
+	appScrollLockHeld = false;
 	resetScrollLock();
 	document.body.classList.remove('is-map-view', 'is-login-view');
 });
@@ -160,7 +131,6 @@ onBeforeUnmount(() => {
 		/>
 	</div>
 	<AppToast />
-	<MobileDebugButton />
 </template>
 
 <style>
@@ -174,7 +144,10 @@ onBeforeUnmount(() => {
 .app-shell {
 	display: flex;
 	flex-direction: column;
-	width: 100%;
+	position: fixed;
+	left: var(--app-vv-offset-left, 0px);
+	top: var(--app-vv-offset-top, 0px);
+	width: var(--app-vv-width, 100%);
 	height: var(--app-vv-height, 100dvh);
 	max-height: var(--app-vv-height, 100dvh);
 	overflow: hidden;

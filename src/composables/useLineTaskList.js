@@ -1,7 +1,7 @@
 import { computed, ref } from 'vue';
 import { fetchLineTaskList, normalizeLineTaskList } from '../api/lineMonitor.js';
 
-export const LINE_TASK_LIST_PAGE_SIZE = 1500;
+export const LINE_TASK_LIST_PAGE_SIZE = 3000;
 
 const patches = ref([]);
 const total = ref(0);
@@ -25,8 +25,8 @@ function resetPatchesState() {
 	visibleListCount.value = 0;
 }
 
-function buildQueryKey({ filters = {}, headerTab = '', keyword = '' } = {}) {
-	return JSON.stringify({ filters, headerTab, keyword });
+function buildQueryKey({ filters = {}, headerTab = '' } = {}) {
+	return JSON.stringify({ filters, headerTab });
 }
 
 function appendPatches(incoming) {
@@ -58,13 +58,13 @@ async function fetchTaskListPage(page) {
 		return { total: 0, patches: [] };
 	}
 
-	const { filters, headerTab, keyword } = latestQueryParams;
+	const { filters, headerTab } = latestQueryParams;
 	const data = await fetchLineTaskList(filters, {
 		headerTab,
-		keyword,
 		pageNum: page,
 		pageSize: LINE_TASK_LIST_PAGE_SIZE
 	});
+
 	return normalizeLineTaskList(data);
 }
 
@@ -91,8 +91,8 @@ export function findLineTaskListPatch(patchId) {
 
 /** 线状异物任务列表（地图线段 + 底部列表复用） */
 export function useLineTaskList() {
-	async function loadLineTaskList({ filters = {}, headerTab = '', keyword = '' } = {}) {
-		const queryParams = { filters, headerTab, keyword };
+	async function loadLineTaskList({ filters = {}, headerTab = '' } = {}) {
+		const queryParams = { filters, headerTab };
 		const nextQueryKey = buildQueryKey(queryParams);
 
 		if (loadPromise && nextQueryKey === latestQueryKey.value) {

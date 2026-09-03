@@ -1,11 +1,14 @@
 <script setup>
-import { computed, onBeforeUnmount, provide, ref, watch } from 'vue';
+import { computed, onBeforeUnmount, onMounted, provide, ref, watch } from 'vue';
 import { useGlobalTabBar } from '../business/map-shell/composables/useGlobalTabBar.js';
 import { useLineTaskList } from '../composables/useLineTaskList.js';
 import { useLineTaskListCount } from '../composables/useLineTaskListCount.js';
 import { useTaskList } from '../composables/useTaskList.js';
 import { useTaskListCount } from '../composables/useTaskListCount.js';
-import { createEmptyFilters } from '../business/map-shell/utils/monitorFilters.js';
+import {
+	createEmptyFilters,
+	createEmptyLineQuery
+} from '../business/map-shell/utils/monitorFilters.js';
 import { useRoute } from 'vue-router';
 import MapContainer from '../map-kit/components/MapContainer.vue';
 import Mars2dMap from '../map-kit/mars2d/components/Mars2dMap.vue';
@@ -27,8 +30,17 @@ import MapFeatureDetailSheet from '../business/map-shell/components/MapFeatureDe
 import MapPatchListSheet from '../business/map-shell/components/MapPatchListSheet.vue';
 import MapVerifyFormSheet from '../business/map-shell/components/MapVerifyFormSheet.vue';
 import MonitorMockGraphics from '../business/map-shell/components/MonitorMockGraphics.vue';
+import { preloadWatermarkFont } from '../business/map-shell/utils/addPhotoWatermark.js';
 import { useMapEvent } from '../map-kit/composables/useMapEvent.js';
 import { MapEventType } from '../map-kit/core/mapEvents.js';
+import {
+	fetchAbnormalMonitorDetail,
+	normalizeAbnormalMonitorDetail
+} from '../api/lineMonitor.js';
+import {
+	fetchAbnormalSurfaceDetail,
+	normalizeAbnormalSurfaceDetail
+} from '../api/statistics.js';
 import '../business/map-shell/styles/map-slide-animations.scss';
 
 defineOptions({
@@ -40,9 +52,12 @@ const mapOptions = getDefaultMapOptions();
 const activeTab = computed(() => route.meta.tab || 'area-monitor');
 const headerTab = ref('pending-verify');
 const searchKeyword = ref('');
+const lineQuery = ref(createEmptyLineQuery());
 const mapLoaded = ref(false);
 const patchListSnap = ref('collapsed');
 const patchListSnapBeforeDetail = ref('collapsed');
+const mapTopBarRef = ref(null);
+const filterPanelOpen = ref(false);
 const featureDetailTransitionVisible = ref(false);
 const appliedFilters = ref(createEmptyFilters());
 
@@ -119,6 +134,7 @@ const { refreshMonitorData, handleFilterChange } = useMonitorRefresh({
 	isMonitorTab,
 	headerTab,
 	searchKeyword,
+	lineQuery,
 	appliedFilters,
 	patchListSnap,
 	loadTaskListCount,
@@ -150,6 +166,48 @@ function onVerifySuccess(payload) {
 	handleVerifySuccess();
 }
 
+async function refreshVerifyDetailAfterCorrect(payload) {
+	const kind = payload?.kind || verifyDetail.value?.kind;
+	const id = payload?.detailId ?? verifyDetail.value?.id;
+	if (!id || (kind !== 'area' && kind !== 'line')) {
+		return;
+	}
+
+	try {
+		const data =
+			kind === 'line'
+				? await fetchAbnormalMonitorDetail(id)
+				: await fetchAbnormalSurfaceDetail(id);
+		const normalized =
+			kind === 'line'
+				? normalizeAbnormalMonitorDetail(data)
+				: normalizeAbnormalSurfaceDetail(data);
+		if (!normalized) {
+			return;
+		}
+		if (verifyDetail.value) {
+			verifyDetail.value = {
+				...verifyDetail.value,
+				...normalized
+			};
+		}
+		if (featureDetail.value?.id != null && String(featureDetail.value.id) === String(id)) {
+			featureDetail.value = {
+				...featureDetail.value,
+				...normalized
+			};
+		}
+	} catch (error) {
+		console.warn('[MapLayout] refresh verify detail after correct failed', error);
+	}
+}
+
+function onCorrectSuccess(payload) {
+	showToast(payload?.successMessage || '改正成功', 'success');
+	refreshMonitorData();
+	refreshVerifyDetailAfterCorrect(payload);
+}
+
 watch(
 	() => bottomBarVisible.value,
 	(barVisible) => {
@@ -157,6 +215,21 @@ watch(
 	},
 	{ immediate: true }
 );
+
+function handleFilterOpen(open) {
+	filterPanelOpen.value = open;
+	if (open && patchListSnap.value !== 'collapsed') {
+		patchListSnap.value = 'collapsed';
+	}
+}
+
+watch(patchListSnap, (snap) => {
+	// 列表展开时若筛选仍开着，只关筛选，不要反向把列表压回去
+	if ((snap === 'peek' || snap === 'expanded') && filterPanelOpen.value) {
+		filterPanelOpen.value = false;
+		mapTopBarRef.value?.closeFilter();
+	}
+});
 
 function handleFeatureDetailClose() {
 	featureDetailTransitionVisible.value = false;
@@ -187,6 +260,10 @@ function handleMapLoaded() {
 	mapLoaded.value = true;
 }
 
+onMounted(() => {
+	preloadWatermarkFont();
+});
+
 useMapEvent(MapEventType.FEATURE_CLICK, handleFeatureClick);
 
 onBeforeUnmount(() => {
@@ -197,7 +274,13 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-	<main class="map-page" :class="{ 'map-page--clear-screen': isClearScreen }">
+	<main
+		class="map-page"
+		:class="{
+			'map-page--clear-screen': isClearScreen,
+			'map-page--line-query': monitorType === 'line'
+		}"
+	>
 		<MapContainer>
 			<MonitorMockGraphics v-if="mapLoaded" :active-tab="activeTab" />
 
@@ -210,14 +293,17 @@ onBeforeUnmount(() => {
 			/>
 
 			<MapTopBar
+				ref="mapTopBarRef"
 				v-model="headerTab"
 				v-model:search-text="searchKeyword"
+				v-model:line-query="lineQuery"
 				:filters="appliedFilters"
 				:tabs="topBarTabs"
 				:monitor-type="monitorType"
 				:visible="topBarVisible"
 				:motion-class="topBarMotionClass"
 				@filter-change="handleFilterChange"
+				@filter-open="handleFilterOpen"
 			/>
 
 			<MapControlPanel
@@ -239,6 +325,7 @@ onBeforeUnmount(() => {
 				:detail="verifyDetail"
 				@back="handleVerifyBack"
 				@success="onVerifySuccess"
+				@correct-success="onCorrectSuccess"
 			/>
 
 			<MapPatchListSheet
@@ -267,5 +354,9 @@ onBeforeUnmount(() => {
 	height: 100%;
 	overflow: hidden;
 	--map-top-bar-height: calc(96px + env(safe-area-inset-top, 0px));
+
+	&.map-page--line-query {
+		--map-top-bar-height: calc(132px + env(safe-area-inset-top, 0px));
+	}
 }
 </style>

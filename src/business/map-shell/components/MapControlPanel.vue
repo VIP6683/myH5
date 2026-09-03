@@ -188,9 +188,13 @@ const handleLocateMyPosition = async () => {
 
 	locating.value = true;
 	try {
-		const coords = await requestLocation();
+		const coords = await requestLocation({ needOrientation: true });
 		if (coords) {
-			await locateMyPosition({ lng: coords.lng, lat: coords.lat });
+			await locateMyPosition({
+				lng: coords.lng,
+				lat: coords.lat,
+				coordinateType: coords.coordinateType || 'wgs84'
+			});
 		}
 	} catch (error) {
 		if (error?.message !== 'cancelled' && error?.message !== 'denied') {
