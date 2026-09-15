@@ -7,6 +7,7 @@ import { getMapInstance } from '../../../map-kit/mapApi.js';
 import {
 	buildMonitorAreaStyle,
 	getAbnormalTypeColor,
+	isAbnormalMoveType,
 	shouldFillMonitorPatch
 } from '../constants/abnormalType.js';
 import { MONITOR_LAYER_ID } from '../constants/monitorLayer.js';
@@ -202,7 +203,10 @@ async function ensureMonitorLayers(map) {
 function resolvePatchStyle(patch, kind) {
 	const color = getAbnormalTypeColor(patch?.attr?.objectType);
 	const filled = shouldFillMonitorPatch(kind, patch?.attr?.taskStatus);
-	return buildMonitorAreaStyle(color, { filled });
+	return buildMonitorAreaStyle(color, {
+		filled,
+		abnormalMoved: isAbnormalMoveType(patch?.attr?.abnormalMoveType)
+	});
 }
 
 function addPatchGraphic(layer, mars2d, patch, kind) {

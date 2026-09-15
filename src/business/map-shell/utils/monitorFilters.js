@@ -1,7 +1,8 @@
 import {
 	fetchAllPeriod,
 	fetchAllYear,
-	normalizeLabelValueOptions
+	normalizeLabelValueOptions,
+	pickLatestOptionValue
 } from '../../../api/statistics.js';
 import {
 	fetchLineAllPeriod,
@@ -16,7 +17,7 @@ export const TASK_STATUS_OPTIONS = [
 	{ value: '3', label: '已处置' }
 ];
 
-/** 面状监测：异物距离（变电站距离）区间，入参 distanceSubstationRange */
+/** 面状监测：异物距离（变电站距离）区间，入参 distanceRanges（英文逗号分隔） */
 export const DISTANCE_SUBSTATION_RANGE_OPTIONS = [
 	{ value: '0', label: '0-50米' },
 	{ value: '1', label: '51-100米' },
@@ -26,7 +27,7 @@ export const DISTANCE_SUBSTATION_RANGE_OPTIONS = [
 	{ value: '5', label: '501-1000米' }
 ];
 
-/** 线状监测：异物距离区间，入参 distanceSubstationRange */
+/** 线状监测：异物距离区间，入参 distanceRanges（英文逗号分隔） */
 export const LINE_DISTANCE_SUBSTATION_RANGE_OPTIONS = [
 	{ value: '0', label: '0-100米' },
 	{ value: '1', label: '100-300米' },
@@ -51,7 +52,7 @@ export function createEmptyFilters() {
 		period: '',
 		objectType: '',
 		taskStatus: '',
-		distanceSubstationRange: ''
+		distanceSubstationRange: []
 	};
 }
 
@@ -96,7 +97,7 @@ export function mergeHeaderTabFilters(current = createEmptyFilters(), headerTab 
 }
 
 /**
- * 按筛选面板同款接口解析默认年/期：第一年的第一个期度
+ * 按筛选面板同款接口解析默认年/期：最新年的最新期度
  * @param {'area' | 'line'} monitorType
  * @param {'pending-verify' | 'pending-dispose'} headerTab
  */
@@ -107,22 +108,22 @@ export async function resolveDefaultMonitorFilters(monitorType, headerTab = 'pen
 		const yearPayload =
 			monitorType === 'line' ? await fetchLineAllYear() : await fetchAllYear();
 		const yearOptions = normalizeLabelValueOptions(yearPayload);
-		const firstYear = yearOptions[0]?.value ?? '';
-		if (!firstYear) {
+		const latestYear = pickLatestOptionValue(yearOptions);
+		if (!latestYear) {
 			return defaults;
 		}
 
 		const periodPayload =
 			monitorType === 'line'
-				? await fetchLineAllPeriod(firstYear)
-				: await fetchAllPeriod(firstYear);
+				? await fetchLineAllPeriod(latestYear)
+				: await fetchAllPeriod(latestYear);
 		const periodOptions = normalizeLabelValueOptions(periodPayload);
-		const firstPeriod = periodOptions[0]?.value ?? '';
+		const latestPeriod = pickLatestOptionValue(periodOptions);
 
 		return {
 			...defaults,
-			year: firstYear,
-			period: firstPeriod
+			year: latestYear,
+			period: latestPeriod
 		};
 	} catch {
 		return defaults;

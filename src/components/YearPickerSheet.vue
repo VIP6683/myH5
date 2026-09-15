@@ -61,11 +61,25 @@ const readSelectedYear = () => {
 	return props.years[clamped] ?? '';
 };
 
-const getCurrentYear = () => String(new Date().getFullYear());
+const pickLatestYear = (years = []) => {
+	if (!Array.isArray(years) || !years.length) {
+		return '';
+	}
+	return years.reduce((latest, year) => {
+		const latestNum = Number(latest);
+		const yearNum = Number(year);
+		if (!Number.isFinite(yearNum)) {
+			return latest;
+		}
+		if (!Number.isFinite(latestNum) || yearNum > latestNum) {
+			return String(year);
+		}
+		return latest;
+	}, String(years[0] ?? ''));
+};
 
 const syncDraftFromModel = () => {
-	const currentYear = getCurrentYear();
-	const fallback = props.years.includes(currentYear) ? currentYear : (props.years[0] ?? '');
+	const fallback = pickLatestYear(props.years);
 	draftYear.value = String(props.modelValue || fallback);
 };
 

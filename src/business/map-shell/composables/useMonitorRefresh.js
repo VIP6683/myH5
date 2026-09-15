@@ -238,7 +238,7 @@ export function useMonitorRefresh(ctx) {
 			if (monitorTypeChanged) {
 				appliedFilters.value = {
 					...appliedFilters.value,
-					distanceSubstationRange: ''
+					distanceSubstationRange: []
 				};
 			}
 

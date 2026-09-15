@@ -39,7 +39,7 @@ const STATIC_FILTER_GROUPS = [
 	{
 		key: 'distanceSubstationRange',
 		label: '异物距离',
-		multiple: false,
+		multiple: true,
 		options: DISTANCE_SUBSTATION_RANGE_OPTIONS
 	}
 	// 任务状态由顶部 tab 控制（待核查=0，待处置=2），面板不再展示选择
@@ -101,12 +101,22 @@ const normalizeObjectType = (value) => {
 	return value ?? '';
 };
 
+const normalizeDistanceRanges = (value) => {
+	if (Array.isArray(value)) {
+		return value.map((item) => String(item)).filter(Boolean);
+	}
+	if (value === undefined || value === null || value === '') {
+		return [];
+	}
+	return [String(value)];
+};
+
 const cloneFilters = (value) => ({
 	year: value?.year ?? '',
 	period: value?.period ?? '',
 	objectType: normalizeObjectType(value?.objectType),
 	taskStatus: value?.taskStatus ?? '',
-	distanceSubstationRange: value?.distanceSubstationRange ?? ''
+	distanceSubstationRange: normalizeDistanceRanges(value?.distanceSubstationRange)
 });
 
 const syncDraftFromModel = () => {

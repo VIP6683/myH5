@@ -54,6 +54,31 @@ export function normalizeLabelValueOptions(payload) {
 }
 
 /**
+ * 从选项中选取数值最大的 value（最新年 / 最新期）
+ * @param {{ label?: string, value?: string }[]} options
+ * @returns {string}
+ */
+export function pickLatestOptionValue(options = []) {
+	if (!Array.isArray(options) || !options.length) {
+		return '';
+	}
+
+	const latest = options.reduce((best, item) => {
+		const bestNum = Number(best?.value);
+		const itemNum = Number(item?.value);
+		if (!Number.isFinite(itemNum)) {
+			return best;
+		}
+		if (!Number.isFinite(bestNum) || itemNum > bestNum) {
+			return item;
+		}
+		return best;
+	}, options[0]);
+
+	return latest?.value != null ? String(latest.value) : '';
+}
+
+/**
  * @typedef {Object} PersonalTaskStatsVo
  * @property {number} period 期数
  * @property {string} periodName 期数名称
@@ -147,7 +172,7 @@ const HEADER_TAB_TASK_STATUS = {
  * @property {string} [keyword]
  * @property {string} [objectType]
  * @property {string | number} [taskStatus] 任务状态：0 未核查，1 已核查，2 待处置，3 已处置
- * @property {string | number} [distanceSubstationRange] 异物距离区间：0~5
+ * @property {string | number | Array<string | number>} [distanceSubstationRange] 异物距离区间多选：0~5，请求时转为 distanceRanges
  */
 
 function appendQueryParam(params, key, value) {
@@ -155,6 +180,25 @@ function appendQueryParam(params, key, value) {
 		return;
 	}
 	params[key] = String(value);
+}
+
+/**
+ * 多选距离区间 → distanceRanges（英文逗号分隔，如 0,2,3）
+ * @param {Record<string, string>} params
+ * @param {string | number | Array<string | number>} [value]
+ */
+function appendDistanceRangesParam(params, value) {
+	const ranges = Array.isArray(value)
+		? value.filter((item) => item !== undefined && item !== null && item !== '')
+		: value !== undefined && value !== null && value !== ''
+			? [value]
+			: [];
+
+	if (!ranges.length) {
+		return;
+	}
+
+	params.distanceRanges = ranges.map(String).join(',');
 }
 
 function pickDefaultYearPeriod(filters = {}) {
@@ -213,7 +257,7 @@ function appendTaskListCommonFilters(params, query = {}, options = {}) {
 		appendQueryParam(params, 'abnormalType', OBJECT_TYPE_API_MAP[objectType]);
 	}
 
-	appendQueryParam(params, 'distanceSubstationRange', query.distanceSubstationRange);
+	appendDistanceRangesParam(params, query.distanceSubstationRange);
 }
 
 function appendTaskListFilters(params, query = {}, options = {}) {
@@ -391,6 +435,10 @@ export function normalizeTaskListRow(row) {
 			substationName: row?.substationName || '',
 			patchArea: row?.areaSqMeter,
 			objectDistance: row?.distanceSubstation,
+			abnormalMoveType:
+				row?.abnormalMoveType != null && row?.abnormalMoveType !== ''
+					? Number(row.abnormalMoveType)
+					: null,
 			name: abnormalType.label !== '-' ? abnormalType.label : `图斑-${id}`
 		}
 	};
@@ -492,7 +540,7 @@ export function parseAbnormalPhotoUrls(value) {
  * @property {number} [checkStatus] 核查状态：0 待核查，1 已核查
  * @property {number} [checkType] 核查类型：0 线上，1 线下
  * @property {number} [disposalStatus] 处置状态：0 待处置，1 已处置，2 无需处置
- * @property {number} [correctStatus] 关注状态：0 不用关注，1 短期关注，2 长期关注（字典 correct_staus）
+ * @property {number} [correctStatus] 关注状态：0 不用关注，1 短期关注，2 长期关注（字典 correct_staus；核查/处置提交均可传）
  * @property {string} [checkOpinion] 核查意见
  * @property {string} [checkRemark] 备注
  * @property {string} [checkPhotos] 核查照片 url 列表（JSON 数组字符串）

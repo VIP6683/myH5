@@ -28,6 +28,24 @@ export const MONITOR_FILL_OPACITY = 0.22;
  */
 export const MONITOR_OUTLINE_ONLY_OPACITY = 0.01;
 
+/** abnormalMoveType 为 1/2 时的位移图斑描边（对齐服务端 stroke 样式） */
+export const ABNORMAL_MOVE_OUTLINE_COLOR = '#FFFF00';
+export const ABNORMAL_MOVE_OUTLINE_WIDTH = 4;
+export const ABNORMAL_MOVE_DASH_ARRAY = '8 4';
+
+/**
+ * abnormalMoveType 存在且为 1 或 2 时，使用虚线黄边
+ * @param {string | number | null | undefined} abnormalMoveType
+ * @returns {boolean}
+ */
+export function isAbnormalMoveType(abnormalMoveType) {
+	if (abnormalMoveType === undefined || abnormalMoveType === null || abnormalMoveType === '') {
+		return false;
+	}
+	const value = Number(abnormalMoveType);
+	return value === 1 || value === 2;
+}
+
 /**
  * 是否使用半透明填充（否则仅描边）
  * 线状：待核查填充，待处置仅边框
@@ -45,22 +63,27 @@ export function shouldFillMonitorPatch(kind, taskStatus) {
 
 /**
  * @param {string} color
- * @param {{ filled?: boolean }} [options]
+ * @param {{ filled?: boolean, abnormalMoved?: boolean }} [options]
  */
 export function buildMonitorAreaStyle(color, options = {}) {
 	const filled = options.filled !== false;
+	const abnormalMoved = options.abnormalMoved === true;
+	const outlineColor = abnormalMoved ? ABNORMAL_MOVE_OUTLINE_COLOR : color;
+	const outlineWidth = abnormalMoved ? ABNORMAL_MOVE_OUTLINE_WIDTH : 3;
+
 	return {
 		fill: true,
 		fillColor: color,
 		fillOpacity: filled ? MONITOR_FILL_OPACITY : MONITOR_OUTLINE_ONLY_OPACITY,
 		outline: true,
-		outlineColor: color,
-		outlineWidth: 3,
+		outlineColor,
+		outlineWidth,
 		outlineOpacity: 1,
 		/** Leaflet Path 直传，保证描边色/不透明度与填充解耦 */
-		color,
+		color: outlineColor,
 		opacity: 1,
-		weight: 3,
+		weight: outlineWidth,
+		...(abnormalMoved ? { dashArray: ABNORMAL_MOVE_DASH_ARRAY } : {}),
 		interactive: true
 	};
 }

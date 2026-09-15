@@ -76,7 +76,7 @@ const createDefaultCorrectForm = () => ({
 });
 const correctForm = reactive(createDefaultCorrectForm());
 
-/** 处置时的核查状态（字典 correct_staus） */
+/** 核查/处置均可填的核查状态（字典 correct_staus） */
 const correctStatusOptions = ref([]);
 const correctStatusLoading = ref(false);
 const correctStatusPickerVisible = ref(false);
@@ -143,10 +143,8 @@ const selectedCorrectStatusOption = computed(() =>
 
 const correctStatusLabel = computed(() => selectedCorrectStatusOption.value?.label || '');
 
-/** 处置时可填核查状态：继续处置，或首次核查勾选「是否处置」 */
-const showCorrectStatusField = computed(
-	() => isCheckReadonly.value || form.isVerified
-);
+/** 核查状态在处置完成前都可编辑（首次核查与后续处置均可设置） */
+const isCorrectStatusReadonly = computed(() => isDisposeReadonly.value);
 
 const submitButtonLabel = computed(() => {
 	if (submitting.value) {
@@ -690,7 +688,7 @@ const loadCorrectStatusOptions = async () => {
 };
 
 const openCorrectStatusPicker = () => {
-	if (isDisposeReadonly.value || submitting.value || correctStatusLoading.value) {
+	if (isCorrectStatusReadonly.value || submitting.value || correctStatusLoading.value) {
 		return;
 	}
 	if (!correctStatusOptions.value.length) {
@@ -784,12 +782,17 @@ const onSubmit = async () => {
 		}
 	}
 
+	const correctStatusRaw = String(form.correctStatus ?? '').trim();
+	if (!isCorrectStatusReadonly.value && !correctStatusRaw) {
+		submitTip.value = '请选择核查状态';
+		return;
+	}
+
 	submitting.value = true;
 	try {
 		let payload;
 		let checkPhotoUrls = [];
 		let disposalPhotoUrls = [];
-		const correctStatusRaw = String(form.correctStatus ?? '').trim();
 		const correctStatusPayload =
 			correctStatusRaw !== '' && !Number.isNaN(Number(correctStatusRaw))
 				? { correctStatus: Number(correctStatusRaw) }
@@ -828,7 +831,7 @@ const onSubmit = async () => {
 				checkRemark: form.remarks?.trim() || '',
 				checkPhotos: JSON.stringify(checkPhotoUrls),
 				disposalPhotos: JSON.stringify(disposalPhotoUrls),
-				...(form.isVerified ? correctStatusPayload : {})
+				...correctStatusPayload
 			};
 		}
 
@@ -888,7 +891,6 @@ watch(
 	(isVerified) => {
 		if (!isVerified) {
 			disposePhotoTip.value = '';
-			form.correctStatus = '';
 			correctStatusPickerVisible.value = false;
 		}
 	}
@@ -1069,6 +1071,44 @@ onBeforeUnmount(() => {
 					</div>
 
 					<div class="map-verify-form-sheet__field map-verify-form-sheet__field--input">
+						<label class="map-verify-form-sheet__field-label">
+							<span class="map-verify-form-sheet__required">*</span>
+							核查状态
+						</label>
+						<button
+							type="button"
+							class="map-verify-form-sheet__select"
+							:disabled="isCorrectStatusReadonly || submitting || correctStatusLoading"
+							@click="openCorrectStatusPicker"
+						>
+							<span
+								class="map-verify-form-sheet__select-text"
+								:class="{ 'is-placeholder': !correctStatusLabel }"
+							>
+								{{
+									correctStatusLoading
+										? '加载中...'
+										: correctStatusLabel || '请选择核查状态'
+								}}
+							</span>
+							<svg
+								class="map-verify-form-sheet__select-arrow"
+								viewBox="0 0 24 24"
+								fill="none"
+								aria-hidden="true"
+							>
+								<path
+									d="M6 9l6 6 6-6"
+									stroke="currentColor"
+									stroke-width="2"
+									stroke-linecap="round"
+									stroke-linejoin="round"
+								/>
+							</svg>
+						</button>
+					</div>
+
+					<div class="map-verify-form-sheet__field map-verify-form-sheet__field--input">
 						<label class="map-verify-form-sheet__field-label">核查意见</label>
 						<input
 							v-model="form.opinion"
@@ -1194,45 +1234,6 @@ onBeforeUnmount(() => {
 				class="map-verify-form-sheet__dispose-card"
 				:class="{ 'is-readonly': isDisposeReadonly }"
 			>
-				<div
-					v-if="showCorrectStatusField"
-					class="map-verify-form-sheet__field map-verify-form-sheet__field--input"
-				>
-					<label class="map-verify-form-sheet__field-label">
-						核查状态
-					</label>
-					<button
-						type="button"
-						class="map-verify-form-sheet__select"
-						:disabled="isDisposeReadonly || submitting || correctStatusLoading"
-						@click="openCorrectStatusPicker"
-					>
-						<span
-							class="map-verify-form-sheet__select-text"
-							:class="{ 'is-placeholder': !correctStatusLabel }"
-						>
-							{{
-								correctStatusLoading
-									? '加载中...'
-									: correctStatusLabel || '请选择核查状态'
-							}}
-						</span>
-						<svg
-							class="map-verify-form-sheet__select-arrow"
-							viewBox="0 0 24 24"
-							fill="none"
-							aria-hidden="true"
-						>
-							<path
-								d="M6 9l6 6 6-6"
-								stroke="currentColor"
-								stroke-width="2"
-								stroke-linecap="round"
-								stroke-linejoin="round"
-							/>
-						</svg>
-					</button>
-				</div>
 				<div class="map-verify-form-sheet__field">
 					<label class="map-verify-form-sheet__field-label">
 						<span v-if="requiresDisposalPhotos" class="map-verify-form-sheet__required">*</span>

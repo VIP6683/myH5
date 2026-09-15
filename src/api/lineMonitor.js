@@ -29,6 +29,25 @@ function appendQueryParam(params, key, value) {
 	params[key] = String(value);
 }
 
+/**
+ * 多选距离区间 → distanceRanges（英文逗号分隔，如 0,2,3）
+ * @param {Record<string, string>} params
+ * @param {string | number | Array<string | number>} [value]
+ */
+function appendDistanceRangesParam(params, value) {
+	const ranges = Array.isArray(value)
+		? value.filter((item) => item !== undefined && item !== null && item !== '')
+		: value !== undefined && value !== null && value !== ''
+			? [value]
+			: [];
+
+	if (!ranges.length) {
+		return;
+	}
+
+	params.distanceRanges = ranges.map(String).join(',');
+}
+
 function pickDefaultYearPeriod(filters = {}) {
 	if (filters.year) {
 		return {
@@ -80,7 +99,7 @@ function appendTaskListCommonFilters(params, query = {}, options = {}) {
 		appendQueryParam(params, 'abnormalType', LINE_OBJECT_TYPE_API_MAP[objectType]);
 	}
 
-	appendQueryParam(params, 'distanceRange', query.distanceSubstationRange);
+	appendDistanceRangesParam(params, query.distanceSubstationRange);
 }
 
 function appendTaskListFilters(params, query = {}, options = {}) {
@@ -297,6 +316,10 @@ export function normalizeLineTaskListRow(row) {
 			lineLength: row?.lineLength ?? row?.lengthMeter,
 			distanceMeter: row?.distanceMeter,
 			objectDistance: row?.distanceSubstation ?? row?.distance,
+			abnormalMoveType:
+				row?.abnormalMoveType != null && row?.abnormalMoveType !== ''
+					? Number(row.abnormalMoveType)
+					: null,
 			name: abnormalType.label !== '-' ? abnormalType.label : `线段-${id}`
 		}
 	};

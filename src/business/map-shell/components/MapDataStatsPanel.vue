@@ -5,7 +5,8 @@ import {
 	fetchAllYear,
 	fetchPersonalTaskStats,
 	normalizeLabelValueOptions,
-	normalizePersonalTaskStats
+	normalizePersonalTaskStats,
+	pickLatestOptionValue
 } from '../../../api/statistics.js';
 import { useMonitorAccess } from '../../../composables/useMonitorAccess.js';
 import YearPickerSheet from '../../../components/YearPickerSheet.vue';
@@ -51,7 +52,10 @@ async function loadYearOptions() {
 	}
 
 	if (!selectedYear.value) {
-		const fallbackYear = yearPickerOptions.value[0] || String(new Date().getFullYear());
+		const fallbackYear =
+			pickLatestOptionValue(yearOptions.value) ||
+			yearPickerOptions.value[0] ||
+			String(new Date().getFullYear());
 		selectedYear.value = fallbackYear;
 	}
 }
@@ -414,5 +418,15 @@ const onYearConfirm = (year) => {
 	padding: 0 2px;
 	font-weight: 500;
 	color: rgba(255, 255, 255, 0.92);
+}
+
+.map-data-stats-panel__table th.is-unverified,
+.map-data-stats-panel__num.is-unverified {
+	color: #ffb020;
+}
+
+.map-data-stats-panel__table th.is-verified,
+.map-data-stats-panel__num.is-verified {
+	color: #3dd68c;
 }
 </style>
